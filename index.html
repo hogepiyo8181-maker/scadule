@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>スケジュール</title>
+<meta name="description" content="色分け・給料計算・まとめて登録ができるカレンダー">
+<meta name="theme-color" content="#17675C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="スケジュール">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: one screen at a time, like a phone app. The month calendar fills its screen; entering an event, a day's list, pay and colors each get their own screen. */
+:root{
+  --bg:#F3F5F4; --surface:#FFFFFF; --ink:#1C2826; --muted:#5C6B68; --line:#D9E0DE;
+  --accent:#17675C; --accent-ink:#FFFFFF; --accent-soft:#DDEFEA;
+  --sun:#C2362F; --sat:#2B5FAE; --today:#17675C;
+  --sel:#FFF3C4; --sel-line:#D6A600; --danger:#B3261E;
+  --f-display:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic","Meiryo",sans-serif;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141A19; --surface:#1D2523; --ink:#E8EEEC; --muted:#9AA9A5; --line:#33403D;
+  --accent:#4CC2AE; --accent-ink:#0E1A18; --accent-soft:#1E3A35;
+  --sun:#F07A72; --sat:#7EA6F0; --today:#4CC2AE;
+  --sel:#4A3F12; --sel-line:#E8C23A; --danger:#F2B8B5;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#141A19; --surface:#1D2523; --ink:#E8EEEC; --muted:#9AA9A5; --line:#33403D;
+  --accent:#4CC2AE; --accent-ink:#0E1A18; --accent-soft:#1E3A35;
+  --sun:#F07A72; --sat:#7EA6F0; --today:#4CC2AE;
+  --sel:#4A3F12; --sel-line:#E8C23A; --danger:#F2B8B5;
+  color-scheme:dark;
+}
+html{-webkit-text-size-adjust:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 96px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:820px;margin:0 auto;display:grid;gap:14px}
+h1,h2,h3,h4{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.3}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--sel-line);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand h1{font-size:1.35rem}
+.proto{font-size:.78rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 10px}
+.tabs{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;gap:4px;width:100%}
+.tabs button{flex:1;border:0;background:none;padding:8px 10px;border-radius:999px;font-weight:700;white-space:nowrap}
+.tabs button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+@media (min-width:640px){.tabs{width:auto}.tabs button{flex:none;padding:8px 18px}}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 16px;font-weight:700;min-height:44px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--danger);border-color:var(--danger);background:none}
+.btn.ghost{border-color:transparent;background:none;padding-inline:4px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.small{border:1px solid var(--line);background:none;border-radius:8px;padding:4px 10px;font-size:.85rem;color:var(--muted);min-height:36px}
+.icon-btn{border:1px solid var(--line);background:var(--surface);width:44px;height:44px;border-radius:50%;font-size:1.2rem;display:grid;place-items:center;flex:none}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:12px;min-width:0}
+.hint,.note{font-size:.85rem;color:var(--muted);margin:0}
+.lbl{font-size:.9rem;font-weight:700}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dot{width:12px;height:12px;border-radius:50%;flex:none;background:var(--cc)}
+
+.mhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mhead .nav{display:flex;align-items:center;gap:6px}
+.mhead h2{font-size:clamp(1.2rem,5.4vw,1.6rem);white-space:nowrap}
+
+.cal{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.dow,.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.dow div{text-align:center;font-size:.85rem;font-weight:700;padding:6px 0;color:var(--muted);border-bottom:1px solid var(--line)}
+.dow div:first-child{color:var(--sun)} .dow div:last-child{color:var(--sat)}
+.day{border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--surface);min-height:104px;padding:4px 3px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
+.day:nth-child(7n){border-right:0}
+.day.out{background:var(--bg);color:var(--muted)}
+.day.out .dnum{opacity:.55}
+.dnum{font-weight:700;font-size:.95rem;line-height:1;display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;align-self:center}
+.day.sun .dnum,.day.hol .dnum{color:var(--sun)} .day.sat .dnum{color:var(--sat)}
+.day.today .dnum{background:var(--today);color:var(--accent-ink)}
+.hname{font-size:.62rem;color:var(--sun);line-height:1.2;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.chip{display:block;font-size:.72rem;line-height:1.3;padding:1px 4px;border-radius:4px;background:var(--cs);border-left:3px solid var(--cc);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ink)}
+.chip.full{background:var(--cc);color:#fff;border-left:0}
+.chip.task{background:none;border:1px solid var(--cc)}
+.chip.done{opacity:.55;text-decoration:line-through}
+.chip .tt{font-variant-numeric:tabular-nums}
+.more{font-size:.68rem;color:var(--muted);text-align:center}
+@media (max-width:560px){
+  .day{min-height:88px;padding:3px 1px}
+  .chip{font-size:.6rem;padding:0 2px;letter-spacing:-.03em}
+}
+.legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:10px 12px;font-size:.85rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+
+.fab{position:fixed;right:calc(20px + env(safe-area-inset-right,0px));bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:15;height:60px;padding:0 22px 0 18px;border-radius:18px;border:0;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:1rem;display:flex;align-items:center;gap:8px;box-shadow:0 6px 18px rgba(0,0,0,.22)}
+.fab b{font-size:1.8rem;line-height:1;font-weight:500}
+
+.sbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:12;background:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:8px;padding-block:6px}
+.sbar h2{font-size:1.15rem;text-align:center;flex:1;min-width:0}
+
+.items{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.item{display:flex;align-items:stretch;gap:4px;border:1px solid var(--line);border-left:6px solid var(--cc);border-radius:10px;background:var(--surface)}
+.item .open{flex:1;min-width:0;border:0;background:none;text-align:left;padding:10px 12px;display:grid;gap:2px}
+.item .t1{font-weight:700;overflow-wrap:anywhere}
+.item .t2{font-size:.9rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.item .t3{font-size:.88rem;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);border-radius:6px;padding:4px 8px;margin-top:4px}
+.chip .memo{opacity:.75;margin-left:1px}
+.item.done .t1{text-decoration:line-through;color:var(--muted)}
+.check-btn{border:0;background:none;padding:0 0 0 12px;display:grid;place-items:center}
+.check-btn span{width:26px;height:26px;border-radius:50%;border:2px solid var(--cc);display:grid;place-items:center;font-weight:700;color:#fff}
+.check-btn[aria-pressed="true"] span{background:var(--cc)}
+.kind{font-size:.72rem;font-weight:700;border:1px solid var(--line);border-radius:999px;padding:0 8px;color:var(--muted);margin-right:6px}
+.empty{color:var(--muted);margin:0;padding:16px;border:1px dashed var(--line);border-radius:10px;text-align:center}
+
+.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px}
+.seg button{flex:1;border:0;background:none;border-radius:9px;padding:10px;font-weight:700;min-height:44px}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
+.title-in{width:100%;border:0;border-bottom:2px solid var(--line);background:none;font-family:var(--f-display);font-size:1.4rem;font-weight:700;padding:8px 2px;border-radius:0}
+.title-in:focus{border-bottom-color:var(--accent);outline:none}
+.switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-weight:700;cursor:pointer}
+.switch{position:relative;width:52px;height:30px;flex:none}
+.switch input{position:absolute;inset:0;opacity:0;cursor:pointer;margin:0;z-index:1}
+.switch span{position:absolute;inset:0;border-radius:999px;background:var(--line);transition:background .15s}
+.switch span::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.switch input:checked+span{background:var(--accent)}
+.switch input:checked+span::after{transform:translateX(22px)}
+.switch input:focus-visible+span{outline:3px solid var(--sel-line);outline-offset:2px}
+input[type=time],input[type=date],input[type=number],input[type=text],select,textarea{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;min-height:44px;min-width:0}
+input[type=number]{width:7em}
+textarea{width:100%;min-height:140px;line-height:1.7;font-variant-numeric:tabular-nums}
+.mini{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;touch-action:none;user-select:none;-webkit-user-select:none}
+.mini .w{text-align:center;font-size:.78rem;font-weight:700;color:var(--muted)}
+.mini .w:first-child{color:var(--sun)} .mini .w:nth-child(7){color:var(--sat)}
+.mday{border:1px solid var(--line);background:var(--surface);border-radius:8px;height:44px;font-weight:700;font-variant-numeric:tabular-nums;display:grid;place-items:center;position:relative;padding:0}
+.mday.sun,.mday.hol{color:var(--sun)} .mday.sat{color:var(--sat)}
+.mday[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.mday.has::after{content:"";position:absolute;bottom:5px;width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.6}
+.wkrow{display:flex;gap:6px;flex-wrap:wrap}
+.wkrow button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-weight:700;padding:0}
+.picked{font-size:.95rem;margin:0;font-variant-numeric:tabular-nums}
+.cats{display:flex;flex-wrap:wrap;gap:8px}
+.cat-btn{display:inline-flex;align-items:center;gap:8px;border:2px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;min-height:44px;font-weight:500}
+.cat-btn[aria-pressed="true"]{border-color:var(--cc);background:var(--cs);font-weight:700}
+.sw{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sw button{width:34px;height:34px;border-radius:50%;border:3px solid var(--surface);background:var(--cc);box-shadow:0 0 0 1px var(--line);padding:0}
+.sw button[aria-pressed="true"]{box-shadow:0 0 0 3px var(--ink)}
+.sw .def{width:auto;border-radius:999px;padding:0 12px;background:var(--surface);font-size:.85rem;font-weight:700;height:34px}
+.custom{position:relative;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#D50000,#F6BF26,#33B679,#039BE5,#8E24AA,#D50000);box-shadow:0 0 0 1px var(--line);cursor:pointer}
+.custom span{width:22px;height:22px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font-weight:700;font-size:.9rem}
+.custom.on{box-shadow:0 0 0 3px var(--ink)}
+.custom.on span{background:var(--cc);color:#fff}
+.custom input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.custom:has(input:focus-visible){outline:3px solid var(--sel-line);outline-offset:2px}
+details.card>summary{cursor:pointer;font-weight:700}
+.preview{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.preview li{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:.85rem;font-variant-numeric:tabular-nums}
+
+.sum-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (min-width:640px){.sum-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.sum-item{display:grid;gap:2px}
+.sum-item .l{font-size:.82rem;color:var(--muted)}
+.sum-item .v{font-family:var(--f-display);font-weight:700;font-size:1.35rem;font-variant-numeric:tabular-nums}
+.sum-item.total .v{color:var(--accent)}
+.shift{border:1px solid var(--line);border-left:6px solid var(--cc);border-radius:10px;padding:10px 12px;display:grid;gap:4px}
+.shift-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.shift .amt{font-family:var(--f-display);font-weight:700;font-size:1.1rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+.shift .det{font-size:.85rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:2px 12px;font-variant-numeric:tabular-nums}
+.wp{border-top:6px solid var(--cc)}
+.wp-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.opt{border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:8px;align-content:start}
+.opt h4{font-size:1rem}
+.check{display:flex;align-items:center;gap:8px;font-weight:500}
+.check input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+
+.crow{border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:10px;background:var(--surface)}
+.crow-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.big-dot{width:28px;height:28px;border-radius:50%;background:var(--cc);flex:none}
+.crow-top input[type=text]{flex:1 1 160px;font-weight:700}
+.sw-name{font-size:.85rem;color:var(--muted)}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:12px 20px;border-radius:999px;font-weight:700;z-index:20;max-width:calc(100% - 32px);text-align:center}
+@media (prefers-reduced-motion:reduce){.switch span,.switch span::after{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top" id="top">
+    <div class="brand"><h1>スケジュール</h1></div>
+    <nav class="tabs" aria-label="画面の切り替え">
+      <button type="button" id="tab-cal" data-view="cal" aria-pressed="true">カレンダー</button>
+      <button type="button" id="tab-pay" data-view="pay" aria-pressed="false">給料</button>
+      <button type="button" id="tab-set" data-view="colors" aria-pressed="false">色と種類</button>
+    </nav>
+  </header>
+  <main id="view"></main>
+</div>
+<button type="button" class="fab" id="fab" data-act="new" aria-label="予定を入れる"><b aria-hidden="true">＋</b>予定を入れる</button>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+const COLORS=[{n:"トマト",h:"#D50000"},{n:"フラミンゴ",h:"#E67C73"},{n:"ミカン",h:"#F4511E"},{n:"バナナ",h:"#F6BF26"},{n:"セージ",h:"#33B679"},{n:"バジル",h:"#0B8043"},{n:"ピーコック",h:"#039BE5"},{n:"ブルーベリー",h:"#3F51B5"},{n:"ラベンダー",h:"#7986CB"},{n:"グレープ",h:"#8E24AA"},{n:"グラファイト",h:"#616161"}];
+const GRAY="#616161";
+const colorName=h=>{const c=COLORS.find(c=>c.h.toLowerCase()===String(h).toLowerCase());return c?c.n:"自分で選んだ色"};
+const WD=["日","月","火","水","木","金","土"];
+const _hol={};
+function holidaysOf(y){
+  if(_hol[y]) return _hol[y];
+  const h={}; const set=(m,d,n)=>{h[ds(y,m-1,d)]=n};
+  const nthMon=(m,n)=>{const f=new Date(y,m-1,1).getDay();return 1+((8-f)%7)+(n-1)*7;};
+  set(1,1,"元日"); set(1,nthMon(1,2),"成人の日"); set(2,11,"建国記念の日"); set(2,23,"天皇誕生日");
+  set(3,Math.floor(20.8431+0.242194*(y-1980)-Math.floor((y-1980)/4)),"春分の日");
+  set(4,29,"昭和の日"); set(5,3,"憲法記念日"); set(5,4,"みどりの日"); set(5,5,"こどもの日");
+  set(7,nthMon(7,3),"海の日"); set(8,11,"山の日"); set(9,nthMon(9,3),"敬老の日");
+  set(9,Math.floor(23.2488+0.242194*(y-1980)-Math.floor((y-1980)/4)),"秋分の日");
+  set(10,nthMon(10,2),"スポーツの日"); set(11,3,"文化の日"); set(11,23,"勤労感謝の日");
+  // 国民の休日（祝日にはさまれた日）
+  Object.keys(h).forEach(k=>{const d=new Date(k+"T00:00");d.setDate(d.getDate()+2);const k2=ds(d.getFullYear(),d.getMonth(),d.getDate());
+    if(h[k2]){d.setDate(d.getDate()-1);const k1=ds(d.getFullYear(),d.getMonth(),d.getDate());if(!h[k1]&&d.getDay()!==0) h[k1]="国民の休日";}});
+  // 振替休日
+  Object.keys(h).sort().forEach(k=>{const d=new Date(k+"T00:00");if(d.getDay()!==0) return;
+    do{d.setDate(d.getDate()+1);}while(h[ds(d.getFullYear(),d.getMonth(),d.getDate())]);
+    h[ds(d.getFullYear(),d.getMonth(),d.getDate())]="振替休日";});
+  return _hol[y]=h;
+}
+const holiday=k=>holidaysOf(+k.slice(0,4))[k];
+const _t=new Date(); let TODAY=`${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,"0")}-${String(_t.getDate()).padStart(2,"0")}`;
+const WAGE_DEFAULT={wage:1100,unit:15,dir:"floor",weekendPlus:0,earlyPlus:0,nightOn:true,nightPct:25,otOn:true,otPct:25,autoBreak:true,holOn:false,holWage:1200,travel:"none",travelAmt:0};
+
+let uid=100; const nid=()=>"e"+(uid++);
+const state={
+  view:"cal", back:"cal", year:_t.getFullYear(), month:_t.getMonth(), sel:TODAY, showTake:true, draft:null,
+  cats:[
+    Object.assign({id:"c0",name:"バイト",color:"#F4511E",pay:true},WAGE_DEFAULT,{holOn:true,travel:"none",travelAmt:0,raises:[]}),
+    {id:"c1",name:"遊び・プライベート",color:"#33B679",pay:false},
+    {id:"c2",name:"大事な予定",color:"#D50000",pay:false},
+    {id:"c3",name:"やること",color:"#3F51B5",pay:false}
+  ],
+  events:[]
+};
+const STORE="irodori-shift-v1";
+function load(){
+  try{const raw=localStorage.getItem(STORE); if(!raw) return false; const o=JSON.parse(raw);
+    if(Array.isArray(o.cats)&&o.cats.length) state.cats=o.cats; if(Array.isArray(o.events)) state.events=o.events;
+    if(typeof o.showTake==="boolean") state.showTake=o.showTake; if(o.uid) uid=o.uid; return true;}catch(e){return false;}
+}
+let saveOK=true;
+function save(){
+  try{localStorage.setItem(STORE,JSON.stringify({v:1,cats:state.cats,events:state.events,showTake:state.showTake,uid}));saveOK=true;}
+  catch(e){if(saveOK) setTimeout(()=>toast("この端末に保存できませんでした。ブラウザの設定を確認してください"),0); saveOK=false;}
+}
+const firstRun=!load();
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const yen=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
+const pad=n=>String(n).padStart(2,"0");
+const ds=(y,m,d)=>`${y}-${pad(m+1)}-${pad(d)}`;
+const toMin=t=>{const[h,m]=t.split(":").map(Number);return h*60+m};
+const ov=(a,b,c,d)=>Math.max(0,Math.min(b,d)-Math.max(a,c));
+const catOf=id=>state.cats.find(c=>c.id===id);
+const colorOf=e=>e.color||(catOf(e.cat)||{color:GRAY}).color;
+const cv=h=>`--cc:${h};--cs:color-mix(in srgb, ${h} 22%, var(--surface))`;
+const st=t=>{const h=+t.slice(0,2),m=t.slice(3);return m==="00"?String(h):h+":"+m};
+const hm=m=>`${Math.floor(m/60)}時間${m%60?(m%60)+"分":""}`;
+const md=k=>{const d=new Date(k+"T00:00");return `${d.getMonth()+1}/${d.getDate()}`};
+const jdate=k=>{const d=new Date(k+"T00:00");return `${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`};
+const isPayShift=e=>e.type==="event"&&!e.allDay&&catOf(e.cat)&&catOf(e.cat).pay;
+const sortItems=(a,b)=>(a.allDay===b.allDay?0:a.allDay?-1:1)||(a.allDay?0:a.start.localeCompare(b.start))||(a.type===b.type?0:a.type==="event"?-1:1);
+const timeLabel=e=>e.allDay?"終日":e.type==="task"?`${e.start}まで`:`${e.start}〜${e.end}`;
+const monthShifts=()=>{const pre=`${state.year}-${pad(state.month+1)}`;return state.events.filter(e=>e.date.startsWith(pre)&&isPayShift(e)).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start));};
+
+function specialDay(date){
+  const m=date.slice(5);
+  if(holiday(date)) return holiday(date);
+  if(m==="12-31"||m==="01-01"||m==="01-02"||m==="01-03") return "年末年始";
+  return null;
+}
+function wageOn(wp,date){
+  let w=+wp.wage||0, from=null;
+  (wp.raises||[]).filter(r=>r.from&&r.from<=date).sort((a,b)=>a.from.localeCompare(b.from)).forEach(r=>{w=+r.wage||0;from=r.from;});
+  return {w,from};
+}
+function shiftPay(ev,wp){
+  let s=toMin(ev.start), e=toMin(ev.end); if(e<=s) e+=1440;
+  const span=e-s;
+  const brk=wp.autoBreak?(span>480?60:span>360?45:0):0;
+  let worked=Math.max(0,span-brk);
+  const u=+wp.unit||1; worked=(wp.dir==="ceil"?Math.ceil(worked/u):Math.floor(worked/u))*u;
+  const w=new Date(ev.date+"T00:00").getDay();
+  const sp=specialDay(ev.date);
+  const eff=wageOn(wp,ev.date); let base=eff.w, why=eff.from?`${md(eff.from)}からの時給`:"";
+  if(wp.holOn&&sp){base=+wp.holWage||base;why=sp+"の時給";}
+  else if((w===0||w===6)&&+wp.weekendPlus){base+= +wp.weekendPlus;why=(why?why+"・":"")+"土日の上乗せ";}
+  const night=Math.min(worked,ov(s,e,0,300)+ov(s,e,1320,1740)+ov(s,e,2760,3180));
+  const early=Math.min(worked,ov(s,e,300,480)+ov(s,e,1740,1920));
+  const ot=Math.max(0,worked-480);
+  const basePay=worked*base/60;
+  const nightPay=wp.nightOn?night*base*(+wp.nightPct||0)/100/60:0;
+  const otPay=wp.otOn?ot*base*(+wp.otPct||0)/100/60:0;
+  const earlyPay=early*(+wp.earlyPlus||0)/60;
+  return {worked,brk,base,why,basePay,nightPay,otPay,earlyPay,pay:Math.floor(basePay+nightPay+otPay+earlyPay)};
+}
+function monthTotals(){
+  const per={}; const wps=state.cats.filter(c=>c.pay);
+  wps.forEach(w=>per[w.id]={pay:0,days:new Set(),travel:0});
+  monthShifts().forEach(e=>{const r=shiftPay(e,catOf(e.cat));per[e.cat].pay+=r.pay;per[e.cat].days.add(e.date);});
+  let pay=0,travel=0;
+  wps.forEach(w=>{const p=per[w.id];p.travel=w.travel==="day"?p.days.size*(+w.travelAmt||0):(w.travel==="pass"&&p.days.size?(+w.travelAmt||0):0);pay+=p.pay;travel+=p.travel;});
+  const tax=pay<88000?0:Math.floor((pay-88000)*0.0511/10)*10;
+  return {per,pay,travel,tax,wps};
+}
+
+/* ---------- screens ---------- */
+function monthHead(){
+  return `<div class="mhead"><div class="nav"><button class="icon-btn" type="button" data-act="prev" aria-label="前の月">‹</button><h2 class="num">${state.year}年${state.month+1}月</h2><button class="icon-btn" type="button" data-act="next" aria-label="次の月">›</button></div><button class="btn" type="button" data-act="today">今日</button></div>`;
+}
+function chip(e){
+  const c=cv(colorOf(e));
+  if(e.type==="task") return `<span class="chip task${e.done?" done":""}" style="${c}">${e.done?"✓":"○"}${esc(e.title)}</span>`;
+  if(e.allDay) return `<span class="chip full" style="${c}">${esc(e.title)}</span>`;
+  return `<span class="chip" style="${c}"><span class="tt">${st(e.start)}-${st(e.end)}</span></span>`;
+}
+function renderCal(){
+  const y=state.year,m=state.month;
+  const first=new Date(y,m,1).getDay(), dim=new Date(y,m+1,0).getDate();
+  const total=Math.ceil((first+dim)/7)*7; const cells=[];
+  for(let i=0;i<total;i++){
+    const d=new Date(y,m,1-first+i); const k=ds(d.getFullYear(),d.getMonth(),d.getDate());
+    const out=d.getMonth()!==m, w=d.getDay(), hol=holiday(k);
+    const evs=state.events.filter(e=>e.date===k).sort(sortItems);
+    const cls=["day",out?"out":"",w===0?"sun":"",w===6?"sat":"",hol?"hol":"",k===TODAY?"today":""].join(" ");
+    cells.push(`<button type="button" class="${cls}" data-day="${k}" aria-label="${jdate(k)}${hol?" "+hol:""}、${evs.length}件">
+      <span class="dnum num">${d.getDate()}</span>${hol&&!out?`<span class="hname">${hol}</span>`:""}
+      ${evs.slice(0,3).map(chip).join("")}${evs.length>3?`<span class="more">+${evs.length-3}</span>`:""}</button>`);
+  }
+  return `<div style="display:grid;gap:12px">${monthHead()}
+  <section class="cal" aria-label="月のカレンダー">
+    <div class="dow">${WD.map(w=>`<div>${w}</div>`).join("")}</div>
+    <div class="grid">${cells.join("")}</div>
+    <div class="legend">${state.cats.map(c=>`<span style="${cv(c.color)}"><i class="dot"></i>${esc(c.name||"名前なし")}</span>`).join("")}<button type="button" class="small" data-view="colors">色を変える</button></div>
+  </section>
+  <p class="hint">日付をタップするとその日の予定が見られます。右下の「＋ 予定を入れる」で予定やタスクを入れられます。${state.events.length?"":"<br>はじめに「色と種類」で色の意味を、「給料」で時給を決めておくと便利です。"}</p></div>`;
+}
+function renderDay(){
+  const k=state.sel; const sp=specialDay(k);
+  const evs=state.events.filter(e=>e.date===k).sort(sortItems);
+  return `<div style="display:grid;gap:12px">
+  <div class="sbar"><button class="btn ghost" type="button" data-view="cal">‹ 戻る</button><h2 class="num">${jdate(k)}</h2><span class="row" style="gap:4px;flex-wrap:nowrap"><button class="icon-btn" type="button" data-act="dprev" aria-label="前の日">‹</button><button class="icon-btn" type="button" data-act="dnext" aria-label="次の日">›</button></span></div>
+  ${sp?`<p class="hint" style="color:var(--sun)">${sp}</p>`:""}
+  ${evs.length?`<ul class="items">${evs.map(e=>{const c=catOf(e.cat)||{name:"不明"};return `<li class="item${e.done?" done":""}" style="${cv(colorOf(e))}">
+    ${e.type==="task"?`<button type="button" class="check-btn" data-done="${e.id}" aria-pressed="${e.done}" aria-label="${e.done?"終わったのを取り消す":"終わった"}"><span>${e.done?"✓":""}</span></button>`:""}
+    <button type="button" class="open" data-open="${e.id}"><span class="t1">${esc(e.title)}</span><span class="t2"><span class="kind">${e.type==="task"?"タスク":"予定"}</span>${timeLabel(e)}・${esc(c.name)}</span>${e.memo?`<span class="t3">${esc(e.memo)}</span>`:""}</button></li>`}).join("")}</ul>`:`<p class="empty">この日の予定はまだありません</p>`}
+  <p class="hint">予定をタップすると直したり消したりできます。</p>
+  <button type="button" class="btn primary" data-act="new">＋ この日に予定を入れる</button></div>`;
+}
+
+function catButtons(cur){
+  return `<div class="cats" role="group" aria-label="種類">${state.cats.map(c=>`<button type="button" class="cat-btn" style="${cv(c.color)}" data-dcat="${c.id}" aria-pressed="${c.id===cur}"><i class="dot"></i>${esc(c.name||"名前なし")}</button>`).join("")}</div>`;
+}
+function miniCal(d){
+  const y=d.my,m=d.mm; const first=new Date(y,m,1).getDay(), dim=new Date(y,m+1,0).getDate();
+  let h=WD.map(w=>`<span class="w">${w}</span>`).join("");
+  for(let i=0;i<first;i++) h+=`<span></span>`;
+  for(let x=1;x<=dim;x++){const k=ds(y,m,x),w=new Date(y,m,x).getDay();const has=state.events.some(e=>e.date===k);
+    h+=`<button type="button" class="mday${w===0?" sun":""}${w===6?" sat":""}${holiday(k)?" hol":""}${has?" has":""}" data-mdate="${k}" aria-pressed="${d.dates.has(k)}" aria-label="${jdate(k)}">${x}</button>`;}
+  return h;
+}
+function renderEdit(){
+  const d=state.draft; const isTask=d.type==="task"; const n=d.dates.size;
+  const custom=d.color&&!COLORS.some(c=>c.h.toLowerCase()===d.color.toLowerCase());
+  return `<div style="display:grid;gap:12px">
+  <div class="sbar"><button class="btn ghost" type="button" data-act="cancel">‹ 戻る</button><h2>${d.editId?"予定を直す":"予定を入れる"}</h2><button class="btn primary" type="button" data-act="save">保存</button></div>
+  <div class="seg" role="group" aria-label="予定かタスクか"><button type="button" data-dtype="event" aria-pressed="${!isTask}">予定</button><button type="button" data-dtype="task" aria-pressed="${isTask}">タスク</button></div>
+  <input class="title-in" type="text" id="d-title" data-d="title" value="${esc(d.title)}" placeholder="${isTask?"やることを入力":"タイトル（空なら種類の名前）"}" aria-label="タイトル">
+  <section class="card">
+    <label class="switch-row" for="d-allDay"><span>終日</span><span class="switch"><input type="checkbox" role="switch" id="d-allDay" data-d="allDay" ${d.allDay?"checked":""}><span></span></span></label>
+    ${d.allDay?"":isTask?`<div class="row"><label for="d-start" class="lbl">時刻</label><input type="time" id="d-start" data-d="start" value="${d.start}"></div>`
+      :`<div class="row"><input type="time" id="d-start" data-d="start" value="${d.start}" aria-label="開始"> 〜 <input type="time" id="d-end" data-d="end" value="${d.end}" aria-label="終了"></div><p class="hint">終わりが始まりより早いときは、次の日の朝までとして計算します（夜勤など）。</p>`}
+  </section>
+  <section class="card">
+    <div class="row" style="justify-content:space-between"><span class="lbl">日にち${d.editId?"":"（いくつでも選べます）"}</span><span class="row" style="flex-wrap:nowrap"><button class="icon-btn" type="button" data-act="mprev" aria-label="前の月">‹</button><b class="num">${d.my}年${d.mm+1}月</b><button class="icon-btn" type="button" data-act="mnext" aria-label="次の月">›</button></span></div>
+    <div class="mini" id="mini">${miniCal(d)}</div>
+    <p class="picked">${n?[...d.dates].sort().map(md).join("、")+`（${n}日）`:"日にちを選んでください"}</p>
+    ${d.editId?`<p class="hint">ほかの日もタップすると、同じ内容をその日にも入れられます。</p>`:`<p class="hint">タップするか指でなぞると、何日でもまとめて選べます。もう一度タップすると外れます。</p>
+    <div class="row"><span class="hint">曜日でまとめて選ぶ：</span><div class="wkrow">${WD.map((w,i)=>`<button type="button" data-wk="${i}" aria-label="${d.mm+1}月の毎週${w}曜日">${w}</button>`).join("")}</div></div>
+    <div class="row"><button type="button" class="small" data-act="clear" ${n?"":"disabled"}>選んだ日をクリア</button></div>`}
+  </section>
+  <section class="card">
+    <span class="lbl">種類（色）</span>${catButtons(d.cat)}
+    <details ${d.color?"open":""}><summary class="hint" style="cursor:pointer">この予定だけ色を変える</summary>
+      <div class="sw" style="margin-top:10px" role="group" aria-label="この予定の色"><button type="button" class="def" data-dcolor="" aria-pressed="${!d.color}">種類の色</button>${COLORS.map(c=>`<button type="button" style="--cc:${c.h}" title="${c.n}" aria-label="${c.n}" data-dcolor="${c.h}" aria-pressed="${d.color===c.h}"></button>`).join("")}<label class="custom${custom?" on":""}" style="--cc:${d.color||GRAY}" title="自分で色を選ぶ"><input type="color" id="d-custom" data-dcustom value="${(d.color||GRAY).toLowerCase()}" aria-label="自分で色を選ぶ"><span aria-hidden="true">＋</span></label></div>
+    </details>
+  </section>
+  <section class="card"><label for="d-memo" class="lbl">メモ</label><textarea id="d-memo" data-d="memo" placeholder="例：持ち物、集合場所、連絡先など" style="min-height:96px">${esc(d.memo||"")}</textarea>${n>1&&!d.editId?`<p class="hint">選んだ${n}日すべてに同じメモが入ります。</p>`:""}</section>
+  ${d.editId?`<button type="button" class="btn danger" data-act="delete">この${isTask?"タスク":"予定"}を消す</button>`:`
+  <details class="card" id="textbox" ${d.textOpen?"open":""}><summary>紙のカレンダーを見ながら文字でまとめて入れる</summary>
+    <p class="hint">「日にち 時間」を1行ずつ書くと、${d.mm+1}月の予定としてまとめて入ります。種類と色は上で選んだものになります。</p>
+    <textarea id="d-text" data-d="text" placeholder="例：&#10;1 勝 9-14&#10;5 勝 11:30-17&#10;8日 11時〜17時&#10;28 松 9-17">${esc(d.text||"")}</textarea>
+    <div class="row"><label for="d-mark" class="lbl">印や名前で絞り込む</label><input type="text" id="d-mark" data-d="mark" value="${esc(d.mark||"")}" placeholder="例：勝" style="width:8em"></div>
+    <p class="hint">家族で1枚のカレンダーを使っているとき、自分の印の行だけを入れられます。空なら全部入ります。</p>
+    <ul class="preview" id="preview"></ul>
+    <button type="button" class="btn primary" id="text-save" data-act="textsave" disabled>読み取った予定を入れる</button>
+  </details>`}
+  </div>`;
+}
+
+function renderPay(){
+  const t=monthTotals();
+  return `<div style="display:grid;gap:14px">${monthHead()}
+  <section class="card" id="pay-sum">${paySummary(t)}</section>
+  <section class="card"><h3>この月の勤務</h3><div id="pay-list" style="display:grid;gap:10px">${payList(monthShifts())}</div></section>
+  <h3>給料の計算方法</h3>
+  <p class="note">時給や計算のしかたを自分で決められます。変えるとすぐ上の金額に反映されます。</p>
+  ${t.wps.map(wageCard).join("")}
+  <section class="card"><h3>手取りの目安</h3>
+    <label class="check"><input type="checkbox" id="showTake" ${state.showTake?"checked":""}>月の手取り目安を表示する</label>
+    <p class="note">所得税をおおまかに引いた金額です（月88,000円未満は0円として計算）。実際の金額は給与明細で確認してください。</p></section>
+  <div class="row"><button type="button" class="btn" data-act="addwp">＋ 働く場所を追加</button></div></div>`;
+}
+function paySummary(t){
+  return `<div class="sum-grid">
+    <div class="sum-item"><span class="l">給料の見込み</span><span class="v">${yen(t.pay)}</span></div>
+    <div class="sum-item"><span class="l">交通費（給料とは別）</span><span class="v">${yen(t.travel)}</span></div>
+    <div class="sum-item total"><span class="l">合計</span><span class="v">${yen(t.pay+t.travel)}</span></div>
+    ${state.showTake?`<div class="sum-item"><span class="l">給料の手取り目安</span><span class="v">${yen(t.pay-t.tax)}</span></div>`:""}</div>
+    <div class="row hint">${t.wps.map(w=>{const p=t.per[w.id];return `<span class="row" style="${cv(w.color)};gap:6px"><i class="dot"></i>${esc(w.name)}：${p.days.size}日・給料 ${yen(p.pay)}・交通費 ${yen(p.travel)}</span>`}).join("")}</div>`;
+}
+function payList(shifts){
+  if(!shifts.length) return `<p class="empty">この月の仕事の予定はまだありません。「給料を計算する」にした種類で時間つきの予定を入れると、ここに出ます。</p>`;
+  return shifts.map(e=>{const w=catOf(e.cat),r=shiftPay(e,w);
+    const det=[`働いた時間 ${hm(r.worked)}`,`時給 ${yen(r.base)}${r.why?`（${r.why}）`:""}`];
+    if(r.brk) det.push(`休憩 ${r.brk}分を引く`); if(r.nightPay) det.push(`深夜割増 +${yen(r.nightPay)}`); if(r.otPay) det.push(`残業割増 +${yen(r.otPay)}`); if(r.earlyPay) det.push(`早朝 +${yen(r.earlyPay)}`);
+    return `<div class="shift" style="${cv(colorOf(e))}"><div class="shift-top"><div><b class="num">${md(e.date)}（${WD[new Date(e.date+"T00:00").getDay()]}）${esc(w.name)}</b><div class="hint num">${e.start}〜${e.end}</div></div><span class="amt">${yen(r.pay)}</span></div><div class="det">${det.map(x=>`<span>${x}</span>`).join("")}</div></div>`;}).join("");
+}
+function wageCard(w){
+  const f=(k,label,suf)=>`<div class="row"><label for="${w.id}-${k}">${label}</label><input type="number" id="${w.id}-${k}" data-cat="${w.id}" data-k="${k}" value="${w[k]}" min="0">${suf}</div>`;
+  const chk=(k,label)=>`<label class="check"><input type="checkbox" id="${w.id}-${k}" data-cat="${w.id}" data-k="${k}" ${w[k]?"checked":""}>${label}</label>`;
+  return `<section class="card wp" style="${cv(w.color)}">
+    <input type="text" id="${w.id}-pname" data-cat="${w.id}" data-k="name" value="${esc(w.name)}" aria-label="働く場所の名前" style="font-weight:700;font-size:1.15rem;max-width:16em">
+    <div class="wp-grid">
+      <div class="opt"><h4>時給</h4>${f("wage","はじめの時給","円")}${f("weekendPlus","土日の上乗せ","円")}${f("earlyPlus","早朝（5〜8時）の上乗せ","円")}</div>
+      <div class="opt"><h4>昇給の記録</h4>${(w.raises||[]).slice().sort((a,b)=>a.from.localeCompare(b.from)).map(r=>`<div class="row"><input type="date" id="${w.id}-${r.id}-from" data-raise="${w.id}" data-rid="${r.id}" data-rk="from" value="${r.from}" aria-label="昇給した日">から<input type="number" id="${w.id}-${r.id}-wage" data-raise="${w.id}" data-rid="${r.id}" data-rk="wage" value="${r.wage}" min="0" aria-label="新しい時給">円<button type="button" class="small" data-delraise="${w.id}" data-rid="${r.id}">消す</button></div>`).join("")}
+        <div class="row"><button type="button" class="small" data-addraise="${w.id}">＋ 昇給を記録する</button></div>
+        <p class="hint">昇給した日より前の勤務は前の時給、その日からは新しい時給で計算します。何回でも記録できます。</p></div>
+      <div class="opt"><h4>時間の切り方</h4>
+        <div class="row"><label for="${w.id}-unit">単位</label><select id="${w.id}-unit" data-cat="${w.id}" data-k="unit">${[1,15,30].map(u=>`<option value="${u}" ${+w.unit===u?"selected":""}>${u}分</option>`).join("")}</select>
+        <select id="${w.id}-dir" data-cat="${w.id}" data-k="dir" aria-label="端数"><option value="floor" ${w.dir==="floor"?"selected":""}>切り捨て</option><option value="ceil" ${w.dir==="ceil"?"selected":""}>切り上げ</option></select></div>
+        ${chk("autoBreak","休憩を自動で引く")}<p class="hint">6時間を超えたら45分、8時間を超えたら60分</p></div>
+      <div class="opt"><h4>割増</h4>${chk("nightOn","深夜（22〜翌5時）")}${f("nightPct","増える割合","%")}${chk("otOn","残業（1日8時間を超えた分）")}${f("otPct","増える割合","%")}</div>
+      <div class="opt"><h4>祝日・年末年始</h4>${chk("holOn","この日だけ時給を変える")}${f("holWage","その日の時給","円")}</div>
+      <div class="opt"><h4>交通費（給料とは別）</h4>
+        <div class="row"><label for="${w.id}-travel">払われ方</label><select id="${w.id}-travel" data-cat="${w.id}" data-k="travel"><option value="none" ${w.travel==="none"?"selected":""}>なし</option><option value="day" ${w.travel==="day"?"selected":""}>出勤1日ごと</option><option value="pass" ${w.travel==="pass"?"selected":""}>定期代（月ごと）</option></select></div>
+        ${f("travelAmt",w.travel==="pass"?"月の金額":"1日の金額","円")}</div>
+    </div></section>`;
+}
+
+function renderColors(){
+  return `<div style="display:grid;gap:14px">
+  <section class="card"><h3>何色を何の予定にするか</h3>
+    <p class="note">色ごとに、どんな予定に使うかを自分で決められます。たとえば「オレンジ＝仕事系」「緑＝遊び系」のように名前を付けてください。仕事の種類は「給料を計算する」をオンにすると、給料の画面に出ます。</p></section>
+  ${state.cats.map(c=>{const custom=!COLORS.some(x=>x.h.toLowerCase()===c.color.toLowerCase());const used=state.events.filter(e=>e.cat===c.id).length;
+    return `<section class="crow" style="${cv(c.color)}">
+    <div class="crow-top"><i class="big-dot" aria-hidden="true"></i><input type="text" id="${c.id}-name" data-cat="${c.id}" data-k="name" value="${esc(c.name)}" aria-label="種類の名前" placeholder="例：仕事系"><button type="button" class="small" data-delcat="${c.id}" ${state.cats.length<2?"disabled":""}>消す</button></div>
+    <div class="sw" role="group" aria-label="色">${COLORS.map(x=>`<button type="button" style="--cc:${x.h}" title="${x.n}" aria-label="${x.n}" data-ccolor="${x.h}" data-id="${c.id}" aria-pressed="${x.h===c.color}"></button>`).join("")}<label class="custom${custom?" on":""}" style="--cc:${c.color}" title="自分で色を選ぶ"><input type="color" id="cp-${c.id}" data-ccustom="${c.id}" value="${c.color.toLowerCase()}" aria-label="自分で色を選ぶ"><span aria-hidden="true">＋</span></label></div>
+    <div class="row" style="justify-content:space-between"><span class="sw-name">${colorName(c.color)}・予定${used}件</span><label class="check"><input type="checkbox" id="${c.id}-pay" data-cat="${c.id}" data-k="pay" ${c.pay?"checked":""}>給料を計算する</label></div>
+  </section>`}).join("")}
+  <div class="row"><button type="button" class="btn" data-act="addcat">＋ 種類を追加</button></div>
+  <section class="card"><h3>データの保存</h3>
+    <p class="note">予定や設定は、このスマホ（ブラウザ）の中に自動で保存されます。機種変更のときや念のための控えに、ファイルに書き出しておけます。</p>
+    <div class="row"><button type="button" class="btn" data-act="export">ファイルに書き出す</button><label class="btn" for="import-file" style="display:inline-flex;align-items:center;cursor:pointer">ファイルから読み込む</label><input type="file" id="import-file" accept="application/json,.json" hidden></div>
+  </section></div>`;
+}
+
+function render(){
+  save();
+  const v=state.view;
+  document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.view===(v==="day"||v==="edit"?"cal":v)));
+  $("#top").hidden=v==="edit";
+  $("#fab").hidden=v!=="cal";
+  $("#view").innerHTML=v==="cal"?renderCal():v==="day"?renderDay():v==="edit"?renderEdit():v==="pay"?renderPay():renderColors();
+  if(v==="edit") updatePreview();
+}
+function go(v){state.view=v;render();window.scrollTo(0,0);}
+function rerenderKeep(){const y=window.scrollY;render();window.scrollTo(0,y);}
+function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2400);}
+
+/* ---------- edit helpers ---------- */
+function openEdit(date,ev){
+  const base=ev||{type:"event",title:"",allDay:false,start:"09:00",end:"17:00",cat:state.cats[0].id,color:""};
+  const k=ev?ev.date:date; const dd=new Date(k+"T00:00");
+  state.draft={editId:ev?ev.id:null,type:base.type,title:base.title,memo:base.memo||"",allDay:base.allDay,start:base.start||"09:00",end:base.end||"17:00",cat:base.cat,color:base.color||"",dates:new Set([k]),my:dd.getFullYear(),mm:dd.getMonth(),text:"",mark:"",textOpen:false};
+  if(state.view!=="edit") state.back=state.view; go("edit");
+}
+function leaveEdit(){state.draft=null;go(state.back==="day"?"day":"cal");}
+function saveDraft(){
+  const d=state.draft; if(!d.dates.size){toast("日にちを1つ以上選んでください");return;}
+  if(!catOf(d.cat)) d.cat=state.cats[0].id;
+  const title=d.title.trim()||catOf(d.cat).name||"予定";
+  const data={type:d.type,title,memo:(d.memo||"").trim(),cat:d.cat,allDay:d.allDay,start:d.start,end:d.type==="task"?d.start:d.end,color:d.color};
+  const dates=[...d.dates].sort();
+  if(d.editId){
+    const ev=state.events.find(e=>e.id===d.editId);
+    if(ev){const keep=dates.includes(ev.date)?ev.date:dates[0];Object.assign(ev,data,{date:keep});dates.filter(x=>x!==keep).forEach(x=>state.events.push(Object.assign({id:nid(),date:x,done:false},data)));}
+  } else dates.forEach(x=>state.events.push(Object.assign({id:nid(),date:x,done:false},data)));
+  if(dates.length===1||state.back!=="day"){state.sel=dates[0];}
+  const dd=new Date(dates[0]+"T00:00"); state.year=dd.getFullYear(); state.month=dd.getMonth();
+  const kind=d.type==="task"?"タスク":"予定";
+  const msg=d.editId?`${kind}を直しました`:dates.length>1?`${dates.length}日分の${kind}を入れました`:`${kind}を入れました`;
+  leaveEdit(); toast(msg);
+}
+function parseText(txt,mark,y,m){
+  mark=(mark||"").trim(); const dim=new Date(y,m+1,0).getDate(); const out=[];
+  const z=txt.replace(/[０-９：]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+  z.split(/[\n,、，]+/).forEach(line=>{
+    const r=line.match(/^\s*(\d{1,2})\s*日?[^\d]*?(\d{1,2})(?:[:時](\d{1,2})?分?)?\s*[-~〜～ー－]\s*(\d{1,2})(?:[:時](\d{1,2})?分?)?/);
+    if(!r) return; if(mark&&!line.includes(mark)) return;
+    const d=+r[1],sh=+r[2],sm=+(r[3]||0),eh=+r[4],em=+(r[5]||0);
+    if(d<1||d>dim||sh>29||eh>29||sm>59||em>59) return;
+    out.push({date:ds(y,m,d),start:`${pad(sh%24)}:${pad(sm)}`,end:`${pad(eh%24)}:${pad(em)}`});
+  });
+  return out;
+}
+function updatePreview(){
+  const d=state.draft, p=$("#preview"), b=$("#text-save"); if(!d||!p) return;
+  const r=parseText(d.text||"",d.mark,d.my,d.mm);
+  p.innerHTML=r.map(x=>`<li>${md(x.date)} ${st(x.start)}〜${st(x.end)}</li>`).join("");
+  b.disabled=!r.length; b.textContent=r.length?`読み取った${r.length}件を入れる`:"読み取った予定を入れる";
+}
+
+/* ---------- picking several days (tap or drag) ---------- */
+let drag=null;
+function pickCell(el){
+  const d=state.draft,k=el.dataset.mdate;
+  if(drag.mode==="add") d.dates.add(k); else d.dates.delete(k);
+  el.setAttribute("aria-pressed",d.dates.has(k));
+}
+document.addEventListener("pointerdown",ev=>{
+  const el=ev.target.closest(".mday"); if(!el||!state.draft) return;
+  ev.preventDefault(); drag={mode:state.draft.dates.has(el.dataset.mdate)?"del":"add"}; pickCell(el);
+});
+document.addEventListener("pointermove",ev=>{
+  if(!drag) return; const t=document.elementFromPoint(ev.clientX,ev.clientY); const el=t&&t.closest(".mday"); if(el) pickCell(el);
+});
+const endDrag=()=>{if(!drag) return; drag=null; rerenderKeep();};
+document.addEventListener("pointerup",endDrag); document.addEventListener("pointercancel",endDrag);
+
+/* ---------- events ---------- */
+function freeColor(){const used=new Set(state.cats.map(c=>c.color));return (COLORS.find(c=>!used.has(c.h))||COLORS[10]).h;}
+document.addEventListener("click",ev=>{
+  const b=ev.target.closest("button"); if(!b) return; const D=b.dataset, d=state.draft;
+  if(D.view){go(D.view);return;}
+  if(D.day){state.sel=D.day;go("day");return;}
+  if(D.open){openEdit(null,state.events.find(e=>e.id===D.open));return;}
+  if(D.done){const e=state.events.find(x=>x.id===D.done);if(e){e.done=!e.done;rerenderKeep();toast(e.done?"タスクを終わりにしました":"タスクを戻しました");}return;}
+  if(D.mdate){ if(ev.detail===0){d.dates.has(D.mdate)?d.dates.delete(D.mdate):d.dates.add(D.mdate);rerenderKeep();} return; }
+  if(D.dtype){d.type=D.dtype; if(d.type==="task"&&catOf(d.cat)&&catOf(d.cat).pay){const t=state.cats.find(c=>!c.pay&&/やること|タスク/.test(c.name))||state.cats.find(c=>!c.pay);if(t)d.cat=t.id;} rerenderKeep();return;}
+  if(D.dcat){d.cat=D.dcat;rerenderKeep();return;}
+  if(D.dcolor!==undefined){d.color=D.dcolor;rerenderKeep();return;}
+  if(D.wk!==undefined){
+    const w=+D.wk, dim=new Date(d.my,d.mm+1,0).getDate(), ks=[];
+    for(let x=1;x<=dim;x++) if(new Date(d.my,d.mm,x).getDay()===w) ks.push(ds(d.my,d.mm,x));
+    const all=ks.every(k=>d.dates.has(k)); ks.forEach(k=>all?d.dates.delete(k):d.dates.add(k)); rerenderKeep();
+    toast(all?`毎週${WD[w]}曜日を外しました`:`毎週${WD[w]}曜日を選びました`); return;
+  }
+  if(D.ccolor){const c=catOf(D.id);if(c){c.color=D.ccolor;rerenderKeep();}return;}
+  if(D.addraise){const c=catOf(D.addraise);if(c){c.raises=c.raises||[];c.raises.push({id:nid(),from:TODAY,wage:wageOn(c,"9999-12-31").w+50});rerenderKeep();toast("昇給した日と新しい時給を入れてください");}return;}
+  if(D.delraise){const c=catOf(D.delraise);if(c){c.raises=(c.raises||[]).filter(r=>r.id!==D.rid);rerenderKeep();}return;}
+  if(D.delcat){
+    if(state.cats.length<2) return; const id=D.delcat; state.cats=state.cats.filter(c=>c.id!==id);
+    state.events.forEach(e=>{if(e.cat===id)e.cat=state.cats[0].id;}); rerenderKeep(); toast("種類を消しました（その予定は先頭の種類に移しました）"); return;
+  }
+  switch(D.act){
+    case "prev": state.month--; if(state.month<0){state.month=11;state.year--;} render(); break;
+    case "next": state.month++; if(state.month>11){state.month=0;state.year++;} render(); break;
+    case "today": state.year=_t.getFullYear(); state.month=_t.getMonth(); state.sel=TODAY; render(); break;
+    case "dprev": case "dnext": {const x=new Date(state.sel+"T00:00"); x.setDate(x.getDate()+(D.act==="dprev"?-1:1)); state.sel=ds(x.getFullYear(),x.getMonth(),x.getDate()); state.year=x.getFullYear(); state.month=x.getMonth(); render(); break;}
+    case "new": openEdit(state.view==="day"?state.sel:(state.sel.startsWith(`${state.year}-${pad(state.month+1)}`)?state.sel:ds(state.year,state.month,1))); break;
+    case "cancel": leaveEdit(); break;
+    case "save": saveDraft(); break;
+    case "delete": {state.events=state.events.filter(e=>e.id!==d.editId); const k=d.type==="task"?"タスク":"予定"; leaveEdit(); toast(`${k}を消しました`); break;}
+    case "mprev": d.mm--; if(d.mm<0){d.mm=11;d.my--;} rerenderKeep(); break;
+    case "mnext": d.mm++; if(d.mm>11){d.mm=0;d.my++;} rerenderKeep(); break;
+    case "clear": d.dates.clear(); rerenderKeep(); break;
+    case "textsave": {
+      const r=parseText(d.text||"",d.mark,d.my,d.mm); if(!r.length) break;
+      const c=catOf(d.cat)||state.cats[0];
+      r.forEach(x=>state.events.push({id:nid(),type:"event",date:x.date,title:d.title.trim()||c.name||"予定",cat:c.id,allDay:false,start:x.start,end:x.end,color:d.color,done:false}));
+      state.year=d.my; state.month=d.mm; state.draft=null; go("cal"); toast(`${r.length}件の予定を入れました`); break;
+    }
+    case "export": {
+      const blob=new Blob([JSON.stringify({v:1,app:"irodori-shift",cats:state.cats,events:state.events,showTake:state.showTake,uid},null,1)],{type:"application/json"});
+      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`shift-backup-${TODAY}.json`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),2000); toast("ファイルに書き出しました"); break;
+    }
+    case "addwp": state.cats.push(Object.assign({id:nid(),name:"新しい働く場所",color:freeColor(),pay:true},WAGE_DEFAULT)); render(); break;
+    case "addcat": {state.cats.push({id:nid(),name:"",color:freeColor(),pay:false}); render(); const ins=document.querySelectorAll('.crow-top input[type=text]'); const last=ins[ins.length-1]; if(last){last.focus();last.scrollIntoView({block:"center"});} break;}
+  }
+});
+document.addEventListener("change",ev=>{
+  if(ev.target.id!=="import-file"||!ev.target.files[0]) return;
+  const r=new FileReader(); r.onload=()=>{try{const o=JSON.parse(r.result); if(!Array.isArray(o.cats)||!Array.isArray(o.events)) throw 0;
+    state.cats=o.cats; state.events=o.events; if(typeof o.showTake==="boolean") state.showTake=o.showTake; if(o.uid) uid=Math.max(uid,o.uid); render(); toast(`${o.events.length}件の予定を読み込みました`);}
+    catch(e){toast("読み込めませんでした。書き出したファイルを選んでください");}}; r.readAsText(ev.target.files[0]); ev.target.value="";
+});
+document.addEventListener("toggle",ev=>{if(ev.target.id==="textbox"&&state.draft) state.draft.textOpen=ev.target.open;},true);
+let _st=null; document.addEventListener("input",()=>{clearTimeout(_st);_st=setTimeout(save,400);});
+document.addEventListener("input",ev=>{
+  const t=ev.target, d=state.draft;
+  if(t.dataset.d&&d){
+    const k=t.dataset.d;
+    if(k==="allDay"){d.allDay=t.checked;rerenderKeep();return;}
+    d[k]=t.value; if(k==="text"||k==="mark") updatePreview(); return;
+  }
+  if(t.dataset.dcustom!==undefined||t.dataset.ccustom){const l=t.closest(".custom");l.style.setProperty("--cc",t.value);l.classList.add("on");return;}
+  if(t.id==="showTake"){state.showTake=t.checked;$("#pay-sum").innerHTML=paySummary(monthTotals());return;}
+  if(t.dataset.raise){const c=catOf(t.dataset.raise);const r=c&&(c.raises||[]).find(x=>x.id===t.dataset.rid);if(r){r[t.dataset.rk]=t.dataset.rk==="wage"?(+t.value||0):t.value;$("#pay-sum").innerHTML=paySummary(monthTotals());$("#pay-list").innerHTML=payList(monthShifts());}return;}
+  if(t.dataset.cat&&t.dataset.k){
+    const c=catOf(t.dataset.cat); if(!c) return; const k=t.dataset.k;
+    if(k==="pay"){c.pay=t.checked; if(c.pay&&c.wage===undefined) Object.assign(c,WAGE_DEFAULT); return;}
+    c[k]=t.type==="checkbox"?t.checked:(t.type==="number"?(t.value===""?0:+t.value):t.value);
+    if(state.view==="pay"){
+      if(k==="travel"){rerenderKeep();return;}
+      $("#pay-sum").innerHTML=paySummary(monthTotals());
+      $("#pay-list").innerHTML=payList(monthShifts());
+    }
+  }
+});
+document.addEventListener("change",()=>save());
+document.addEventListener("change",ev=>{
+  const t=ev.target;
+  if(t.dataset.dcustom!==undefined&&state.draft){state.draft.color=t.value.toUpperCase();rerenderKeep();return;}
+  if(t.dataset.ccustom){const c=catOf(t.dataset.ccustom);if(c){c.color=t.value.toUpperCase();rerenderKeep();}return;}
+  if(t.dataset.k==="pay"||(t.dataset.k==="name"&&state.view==="colors")) rerenderKeep();
+});
+render();
+document.addEventListener("visibilitychange",()=>{if(document.hidden) return; const n=new Date(); const k=ds(n.getFullYear(),n.getMonth(),n.getDate()); if(k!==TODAY){TODAY=k; if(state.view==="cal") render();}});
+if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+})();
+</script>
+</body>
+</html>
