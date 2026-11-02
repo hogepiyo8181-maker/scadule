@@ -212,6 +212,12 @@ textarea{width:100%;min-height:140px;line-height:1.7;font-variant-numeric:tabula
 .custom input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .custom:has(input:focus-visible){outline:3px solid var(--sel-line);outline-offset:2px}
 details.card>summary{cursor:pointer;font-weight:700}
+.more-box{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.more-box>summary{cursor:pointer;font-weight:700;color:var(--muted)}
+.imp{display:grid;gap:10px;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.imp p{margin:0}
+.imp-row{display:grid;gap:4px}
+.imp select{width:100%}
 .preview{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
 .preview li{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:.85rem;font-variant-numeric:tabular-nums}
 
@@ -339,12 +345,12 @@ function startsOn(e,c){
   if(c<e.date) return false;
   if(!isRep(e)) return c===e.date;
   const r=e.repeat; if(r.until&&c>r.until) return false; if((e.skip||[]).includes(c)) return false;
-  const a=new Date(e.date+"T00:00"), b=new Date(c+"T00:00");
+  const a=new Date(e.date+"T00:00"), b=new Date(c+"T00:00"), iv=Math.max(1,+r.interval||1);
   switch(r.freq){
-    case "day": return true;
-    case "week": return diffDays(e.date,c)%7===0;
-    case "month": return a.getDate()===b.getDate();
-    case "year": return a.getDate()===b.getDate()&&a.getMonth()===b.getMonth();
+    case "day": return diffDays(e.date,c)%iv===0;
+    case "week": return diffDays(e.date,c)%(7*iv)===0;
+    case "month": return a.getDate()===b.getDate()&&((b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth())%iv===0;
+    case "year": return a.getDate()===b.getDate()&&a.getMonth()===b.getMonth()&&(b.getFullYear()-a.getFullYear())%iv===0;
   }
   return false;
 }
@@ -362,7 +368,9 @@ function occurrencesOn(k){
 const mkOcc=(e,c,off,L)=>Object.assign({},e,{occ:c,date:c,endDate:L?addDays(c,L):"",first:off===0,last:off===L,multi:L>0,done:isRep(e)?(e.doneOn||[]).includes(c):!!e.done});
 function repeatLabel(e){
   if(!isRep(e)) return ""; const d=new Date(e.date+"T00:00"); const r=e.repeat;
-  const base=r.freq==="day"?"毎日":r.freq==="week"?`毎週${WD[d.getDay()]}曜日`:r.freq==="month"?`毎月${d.getDate()}日`:`毎年${d.getMonth()+1}月${d.getDate()}日`;
+  const iv=Math.max(1,+r.interval||1);
+  const base=iv>1?(r.freq==="day"?`${iv}日ごと`:r.freq==="week"?`${iv}週間ごとの${WD[d.getDay()]}曜日`:r.freq==="month"?`${iv}か月ごとの${d.getDate()}日`:`${iv}年ごとの${d.getMonth()+1}月${d.getDate()}日`)
+    :r.freq==="day"?"毎日":r.freq==="week"?`毎週${WD[d.getDay()]}曜日`:r.freq==="month"?`毎月${d.getDate()}日`:`毎年${d.getMonth()+1}月${d.getDate()}日`;
   return base+(r.until?`（${md(r.until)}まで）`:"");
 }
 const timeLabel=e=>e.multi||spanOf(e)?`${md(e.date)}〜${md(e.endDate)}（終日）`:e.allDay?"終日":e.type==="task"?`${e.start}まで`:`${e.start}〜${e.end}`;
@@ -556,7 +564,7 @@ function renderEdit(){
   </section>
   ${d.isRep&&d.scope==="one"?"":`<section class="card"><label for="d-repeat" class="lbl">くり返し</label>
     <select id="d-repeat" data-d="repeat">${[["","しない"],["day","毎日"],["week","毎週"],["month","毎月"],["year","毎年"]].map(([v,l])=>`<option value="${v}" ${d.repeat===v?"selected":""}>${l}</option>`).join("")}</select>
-    ${d.repeat?`<p class="hint">${repeatLabel({repeat:{freq:d.repeat},date:[...d.dates].sort()[0]||TODAY})}${n>1?"。選んだ日それぞれがくり返します":""}</p>
+    ${d.repeat?`<p class="hint">${repeatLabel({repeat:{freq:d.repeat,interval:d.repeat===d.origFreq?d.interval:1},date:[...d.dates].sort()[0]||TODAY})}${n>1?"。選んだ日それぞれがくり返します":""}</p>
     <div class="row"><label for="d-until" class="lbl">終わりの日</label><input type="date" id="d-until" data-d="until" value="${d.until||""}"></div><p class="hint">空ならずっと続きます。</p>`:""}
   </section>`}
   <section class="card">
@@ -651,6 +659,11 @@ function renderColors(){
   <section class="card"><h3>データの保存</h3>
     <p class="note">予定や設定は、このスマホ（ブラウザ）の中に自動で保存されます。機種変更のときや念のための控えに、ファイルに書き出しておけます。</p>
     <div class="row"><button type="button" class="btn" data-act="export">ファイルに書き出す</button><label class="btn" for="import-file" style="display:inline-flex;align-items:center;cursor:pointer">ファイルから読み込む</label><input type="file" id="import-file" accept="application/json,.json" hidden></div>
+    <details class="more-box" ${state.imp?"open":""}><summary>Googleカレンダーなどから予定を移す</summary>
+      <p class="note">Googleカレンダーで書き出したファイル（.zip か .ics）を選ぶと、その予定をこのアプリに入れられます。</p>
+      <div class="row"><label class="btn" for="ics-file" style="display:inline-flex;align-items:center;cursor:pointer">書き出したファイルを選ぶ</label><input type="file" id="ics-file" accept=".ics,.zip,text/calendar,application/zip,application/x-zip-compressed" multiple hidden></div>
+      ${renderImport()}
+    </details>
   </section></div>`;
 }
 
@@ -675,7 +688,7 @@ function openEdit(date,ev,occ,times){
   const base=ev||{type:"event",title:"",allDay:false,start:(times&&times.start)||"09:00",end:(times&&times.end)||"17:00",cat:state.cats[0].id,color:""};
   const k=ev?(occ||ev.date):date; const dd=new Date(k+"T00:00"); const L=ev?spanOf(ev):0;
   state.draft={editId:ev?ev.id:null,isRep:isRep(ev),scope:isRep(ev)?"one":"all",occ:ev?k:null,type:base.type,title:base.title,memo:base.memo||"",place:base.place||"",allDay:base.allDay,start:base.start||"09:00",end:base.end||"17:00",cat:base.cat,color:base.color||"",
-    endDate:L?addDays(k,L):"",repeat:isRep(ev)?ev.repeat.freq:"",until:isRep(ev)?(ev.repeat.until||""):"",dates:new Set([k]),my:dd.getFullYear(),mm:dd.getMonth(),text:"",mark:"",textOpen:false};
+    endDate:L?addDays(k,L):"",repeat:isRep(ev)?ev.repeat.freq:"",origFreq:isRep(ev)?ev.repeat.freq:"",interval:isRep(ev)?Math.max(1,+ev.repeat.interval||1):1,until:isRep(ev)?(ev.repeat.until||""):"",dates:new Set([k]),my:dd.getFullYear(),mm:dd.getMonth(),text:"",mark:"",textOpen:false};
   if(state.view!=="edit") state.back=state.view; go("edit");
 }
 function leaveEdit(){state.draft=null;go(state.back==="day"||state.back==="search"?state.back:"cal");}
@@ -687,7 +700,7 @@ function saveDraft(){
   const dates=[...d.dates].sort();
   const L=d.allDay&&d.type==="event"&&d.endDate&&d.endDate>dates[0]?diffDays(dates[0],d.endDate):0;
   if(L&&dates.length>1){toast("何日も続く予定は、始まりの日を1つだけ選んでください");return;}
-  const rep=d.repeat?{freq:d.repeat,until:d.until||""}:null;
+  const rep=d.repeat?Object.assign({freq:d.repeat,until:d.until||""},d.interval>1&&d.repeat===d.origFreq?{interval:d.interval}:{}):null;
   const mk=(x,r)=>Object.assign({id:nid(),date:x,done:false,skip:[],doneOn:[]},base,{endDate:L?addDays(x,L):"",repeat:r});
   const snap=JSON.stringify(state.events);
   if(d.editId){
@@ -782,6 +795,168 @@ document.addEventListener("mousemove",e=>{if(mvMove(e.clientX,e.clientY)) e.prev
 document.addEventListener("mouseup",e=>{if(!("ontouchstart" in window)) mvEnd(e);});
 document.addEventListener("contextmenu",e=>{if(mv||(e.target.closest&&e.target.closest(".grid .chip")))e.preventDefault();});
 
+/* ---------- Googleカレンダーなど（.ics / .zip）から予定を移す ---------- */
+async function readCalFiles(files){
+  const out=[];
+  for(const f of files){
+    const b=new Uint8Array(await f.arrayBuffer());
+    if(b[0]===0x50&&b[1]===0x4B) out.push(...await unzipIcs(b));
+    else out.push({name:f.name,text:new TextDecoder().decode(b)});
+  }
+  return out;
+}
+async function unzipIcs(b){
+  const dv=new DataView(b.buffer,b.byteOffset,b.byteLength); let e=-1;
+  for(let i=b.length-22;i>=Math.max(0,b.length-65557);i--) if(dv.getUint32(i,true)===0x06054b50){e=i;break;}
+  if(e<0) throw new Error("zip");
+  const n=dv.getUint16(e+10,true); let p=dv.getUint32(e+16,true); const out=[], td=new TextDecoder();
+  for(let k=0;k<n&&dv.getUint32(p,true)===0x02014b50;k++){
+    const method=dv.getUint16(p+10,true), size=dv.getUint32(p+20,true), fl=dv.getUint16(p+28,true), xl=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true), lho=dv.getUint32(p+42,true);
+    const name=td.decode(b.subarray(p+46,p+46+fl)); p+=46+fl+xl+cl;
+    if(!/\.ics$/i.test(name)) continue;
+    const st=lho+30+dv.getUint16(lho+26,true)+dv.getUint16(lho+28,true), data=b.subarray(st,st+size);
+    let raw;
+    if(method===0) raw=data;
+    else if(method===8) raw=new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+    else continue;
+    out.push({name:name.split("/").pop(),text:td.decode(raw)});
+  }
+  return out;
+}
+const icsUnesc=s=>s.replace(/\\n/gi,"\n").replace(/\\([,;\\])/g,"$1").trim();
+function parseIcs(text,fname){
+  const lines=text.replace(/\r\n?/g,"\n").replace(/\n[ \t]/g,"").split("\n");
+  let name="", cur=null, alarm=0; const evs=[];
+  for(const ln of lines){
+    const m=ln.match(/^([A-Za-z0-9-]+)((?:;[^:]*)?):(.*)$/); if(!m) continue;
+    const key=m[1].toUpperCase(), v=m[3], p={};
+    m[2].slice(1).split(";").filter(Boolean).forEach(x=>{const i=x.indexOf("=");p[x.slice(0,i).toUpperCase()]=x.slice(i+1).replace(/^"|"$/g,"");});
+    if(key==="BEGIN"){ if(v==="VEVENT") cur={EXDATE:[]}; else if(cur) alarm++; continue; }
+    if(key==="END"){ if(v==="VEVENT"&&cur){evs.push(cur);cur=null;alarm=0;} else if(cur&&alarm) alarm--; continue; }
+    if(!cur){ if(key==="X-WR-CALNAME") name=icsUnesc(v); continue; }
+    if(alarm) continue;
+    if(key==="EXDATE") v.split(",").forEach(x=>cur.EXDATE.push({v:x,p})); else cur[key]={v,p};
+  }
+  return {name:name||String(fname||"カレンダー").replace(/\.ics$/i,"").replace(/_[^_]*$/,"")||"カレンダー",evs};
+}
+function zonedDate(Y,Mo,D,h,mi,s,tz){
+  const g=Date.UTC(Y,Mo,D,h,mi,s);
+  try{
+    const f=new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    const off=t=>{const o={};f.formatToParts(new Date(t)).forEach(x=>o[x.type]=x.value);return Date.UTC(+o.year,+o.month-1,+o.day,+o.hour%24,+o.minute,+o.second)-t;};
+    let t=g-off(g); t=g-off(t); return new Date(t);
+  }catch(e){ return new Date(Y,Mo,D,h,mi,s); }
+}
+// 日時を、このスマホの時刻（日にち・時刻）に直す
+function icsWhen(x){
+  if(!x) return null; const m=String(x.v).trim().match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?/); if(!m) return null;
+  if(!m[4]||(x.p&&x.p.VALUE==="DATE")) return {date:`${m[1]}-${m[2]}-${m[3]}`,time:null};
+  const a=[+m[1],+m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0)];
+  const d=m[7]?new Date(Date.UTC(...a)):(x.p&&x.p.TZID)?zonedDate(...a,x.p.TZID):new Date(...a);
+  return {date:ds(d.getFullYear(),d.getMonth(),d.getDate()),time:`${pad(d.getHours())}:${pad(d.getMinutes())}`,ms:d.getTime()};
+}
+function icsDur(s){const m=String(s||"").match(/^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);if(!m) return 0;return ((+m[2]||0)*7*86400+(+m[3]||0)*86400+(+m[4]||0)*3600+(+m[5]||0)*60+(+m[6]||0))*1000;}
+const WDK=["SU","MO","TU","WE","TH","FR","SA"];
+function rrMatch(rr,start,k){
+  const a=new Date(start+"T00:00"), d=new Date(k+"T00:00"), iv=Math.max(1,+rr.INTERVAL||1); let idx;
+  switch(rr.FREQ){
+    case "DAILY": idx=diffDays(start,k); break;
+    case "WEEKLY": {const ws=Math.max(0,WDK.indexOf(rr.WKST||"MO")); const sw=x=>addDays(x,-((new Date(x+"T00:00").getDay()-ws+7)%7)); idx=diffDays(sw(start),sw(k))/7; break;}
+    case "MONTHLY": idx=(d.getFullYear()-a.getFullYear())*12+d.getMonth()-a.getMonth(); break;
+    case "YEARLY": idx=d.getFullYear()-a.getFullYear(); break;
+    default: return false;
+  }
+  if(idx<0||idx%iv) return false;
+  const L=s=>String(s||"").split(",").filter(Boolean), bm=L(rr.BYMONTH).map(Number), bmd=L(rr.BYMONTHDAY).map(Number), bd=L(rr.BYDAY);
+  const dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate(), dt=d.getDate();
+  if(bm.length&&!bm.includes(d.getMonth()+1)) return false;
+  if(bmd.length&&!bmd.some(x=>x>0?x===dt:dim+x+1===dt)) return false;
+  if(bd.length&&!bd.some(t=>{const m=t.match(/^([+-]?\d+)?([A-Z]{2})$/); if(!m||WDK.indexOf(m[2])!==d.getDay()) return false; if(!m[1]||rr.FREQ==="WEEKLY") return true; const n=+m[1]; return n>0?Math.floor((dt-1)/7)+1===n:Math.floor((dim-dt)/7)+1===-n;})) return false;
+  if(!bd.length&&!bmd.length){
+    if(rr.FREQ==="WEEKLY"&&d.getDay()!==a.getDay()) return false;
+    if(rr.FREQ==="MONTHLY"&&dt!==a.getDate()) return false;
+    if(rr.FREQ==="YEARLY"&&(dt!==a.getDate()||(!bm.length&&d.getMonth()!==a.getMonth()))) return false;
+  }
+  return true;
+}
+function rrExpand(rr,start,until,limit){
+  const cnt=+rr.COUNT||Infinity, sp=String(rr.BYSETPOS||"").split(",").filter(Boolean).map(Number), out=[];
+  let buf=[], mon=start.slice(0,7), n=0;
+  const flush=()=>{let sel=buf; if(sp.length) sel=sp.map(q=>q>0?buf[q-1]:buf[buf.length+q]).filter(Boolean).sort(); for(const x of sel){if(n>=cnt||out.length>=limit) break; n++; out.push(x);} buf=[];};
+  for(let k=start,i=0;i<11000&&k<=until&&n<cnt&&out.length<limit;i++,k=addDays(k,1)){
+    if(k.slice(0,7)!==mon){flush(); mon=k.slice(0,7);}
+    if(rrMatch(rr,start,k)) buf.push(k);
+  }
+  if(n<cnt&&out.length<limit) flush();
+  return out;
+}
+// 読み込んだ予定を、このアプリの予定の形にする（くり返しは、できるだけ「くり返し予定」のまま）
+function icsToEvents(cal,range){
+  const cut=range==="all"?"0000-00-00":range==="now"?TODAY:addDays(TODAY,-365), horizon=addDays(TODAY,730);
+  const byUid={}; cal.evs.forEach(v=>{const u=(v.UID&&v.UID.v)||Math.random().toString(36); (byUid[u]=byUid[u]||[]).push(v);});
+  const out=[];
+  for(const uid in byUid){
+    const list=byUid[uid], master=list.find(v=>!v["RECURRENCE-ID"]), overrides=list.filter(v=>v["RECURRENCE-ID"]);
+    const moved=overrides.map(v=>{const w=icsWhen(v["RECURRENCE-ID"]);return w&&w.date;}).filter(Boolean);
+    const one=(v,key)=>{
+      if(v.STATUS&&/CANCELLED/i.test(v.STATUS.v)) return null;
+      const s=icsWhen(v.DTSTART); if(!s) return null;
+      let e=icsWhen(v.DTEND);
+      if(!e&&v.DURATION){const ms=icsDur(v.DURATION.v); e=s.time?(()=>{const d=new Date(s.ms+ms);return {date:ds(d.getFullYear(),d.getMonth(),d.getDate()),time:`${pad(d.getHours())}:${pad(d.getMinutes())}`,ms:d.getTime()};})():{date:addDays(s.date,Math.max(1,Math.round(ms/864e5))),time:null};}
+      const ev={type:"event",title:v.SUMMARY?icsUnesc(v.SUMMARY.v)||"（タイトルなし）":"（タイトルなし）",memo:v.DESCRIPTION?icsUnesc(v.DESCRIPTION.v).replace(/<br\s*\/?>/gi,"\n").replace(/<[^>]+>/g,""):"",place:v.LOCATION?icsUnesc(v.LOCATION.v):"",date:s.date,endDate:"",allDay:!s.time,start:s.time||"09:00",end:s.time||"10:00",ics:key};
+      if(!s.time){ const last=e&&e.date>s.date?addDays(e.date,-1):s.date; if(last>s.date) ev.endDate=last; }
+      else if(e&&e.ms-s.ms>=864e5){ const last=e.time==="00:00"?addDays(e.date,-1):e.date; Object.assign(ev,{allDay:true,endDate:last>s.date?last:""}); ev.memo=`${md(s.date)} ${s.time}〜${md(e.date)} ${e.time}`+(ev.memo?"\n"+ev.memo:""); }
+      else if(e){ ev.end=e.time; if(e.ms===s.ms) ev.end=`${pad(Math.min(23,+s.time.slice(0,2)+1))}:${s.time.slice(3)}`; }
+      return ev;
+    };
+    overrides.forEach(v=>{const w=icsWhen(v["RECURRENCE-ID"]);const ev=one(v,uid+"@"+(w?w.date:""));if(ev&&(ev.endDate||ev.date)>=cut) out.push(ev);});
+    if(!master) continue;
+    const base=one(master,uid); if(!base) continue;
+    const rr={}; if(master.RRULE) master.RRULE.v.split(";").forEach(x=>{const i=x.indexOf("=");rr[x.slice(0,i).toUpperCase()]=x.slice(i+1).toUpperCase();});
+    const span=base.endDate?diffDays(base.date,base.endDate):0;
+    if(!rr.FREQ){ if((base.endDate||base.date)>=cut) out.push(base); continue; }
+    const skip=[...master.EXDATE.map(icsWhen).filter(Boolean).map(w=>w.date),...moved];
+    const until=rr.UNTIL?(icsWhen({v:rr.UNTIL,p:{}})||{}).date||"":"";
+    const freq={DAILY:"day",WEEKLY:"week",MONTHLY:"month",YEARLY:"year"}[rr.FREQ], iv=Math.max(1,+rr.INTERVAL||1);
+    const days=String(rr.BYDAY||"").split(",").filter(Boolean), wd=WDK[new Date(base.date+"T00:00").getDay()];
+    const plain=days.every(x=>/^[A-Z]{2}$/.test(x));
+    const simple=freq&&!rr.BYMONTH&&!rr.BYSETPOS&&!rr.BYYEARDAY&&!rr.BYWEEKNO&&!rr.BYHOUR&&
+      (!rr.BYMONTHDAY||(freq==="month"&&+rr.BYMONTHDAY===+base.date.slice(8)))&&
+      (!days.length||(freq==="week"&&plain&&(iv===1||(days.length===1&&days[0]===wd))));
+    let last=until;
+    if(rr.COUNT){ const occ=rrExpand(rr,base.date,"9999-12-31",+rr.COUNT); last=occ[occ.length-1]||base.date; }
+    if(simple){
+      if(last&&last<cut) continue;
+      const starts=days.length>1?days.map(x=>{let k=base.date;for(let i=0;i<7&&WDK[new Date(k+"T00:00").getDay()]!==x;i++) k=addDays(k,1);return [x,k];}):[[ "",base.date]];
+      starts.forEach(([x,k])=>{ if(last&&k>last) return; out.push(Object.assign({},base,{date:k,endDate:span?addDays(k,span):"",repeat:Object.assign({freq,until:last||""},iv>1?{interval:iv}:{}),skip,ics:uid+(x?"#"+x:"")})); });
+    } else {
+      const occ=rrExpand(rr,base.date,last&&last<horizon?last:horizon,1000);
+      occ.filter(k=>!skip.includes(k)&&(span?addDays(k,span):k)>=cut).forEach(k=>out.push(Object.assign({},base,{date:k,endDate:span?addDays(k,span):"",ics:uid+"@"+k})));
+    }
+  }
+  return out;
+}
+function impCatFor(name){
+  const n=(name||"").trim(); const hit=state.cats.find(c=>c.name&&n&&(c.name===n||n.includes(c.name)||c.name.includes(n)));
+  return (hit||state.cats.find(c=>!c.pay)||state.cats[0]).id;
+}
+function impBuild(){
+  const im=state.imp, have=new Set(state.events.map(e=>e.ics).filter(Boolean)); let dup=0;
+  const list=im.cals.map(c=>{const evs=icsToEvents(c,im.range).filter(e=>{if(have.has(e.ics)){dup++;return false;}return true;});return {c,evs};});
+  return {list,dup,total:list.reduce((s,x)=>s+x.evs.length,0)};
+}
+function renderImport(){
+  const im=state.imp; if(!im) return "";
+  const r=impBuild();
+  return `<div class="imp" id="imp">
+    <p><b>${r.total}件の予定を移せます</b>${r.dup?`（すでに入っている${r.dup}件は入れません）`:""}</p>
+    ${r.list.map((x,i)=>`<div class="imp-row"><span>「${esc(x.c.name)}」の${x.evs.length}件は、この種類（色）にする</span><select data-impcat="${i}" aria-label="${esc(x.c.name)}の予定の種類">${state.cats.map(c=>`<option value="${c.id}" ${c.id===x.c.cat?"selected":""}>${esc(c.name||"名前なし")}</option>`).join("")}</select></div>`).join("")}
+    <div class="imp-row"><label for="imp-range" class="lbl">いつからの予定を移すか</label><select id="imp-range">${[["1y","1年前から"],["now","今日から"],["all","すべて"]].map(([v,l])=>`<option value="${v}" ${im.range===v?"selected":""}>${l}</option>`).join("")}</select></div>
+    <p class="note">くり返しの予定は、できるだけくり返しのまま入ります。「第2火曜日」のような形のものは、2年先までの1回ずつの予定として入ります。通知や、Googleカレンダーとの同期はありません。</p>
+    <div class="row"><button type="button" class="btn primary" data-act="impgo" ${r.total?"":"disabled"}>予定を移す</button><button type="button" class="btn" data-act="impcancel">やめる</button></div>
+  </div>`;
+}
+
 /* ---------- events ---------- */
 function freeColor(){const used=new Set(state.cats.map(c=>c.color));return (COLORS.find(c=>!used.has(c.h))||COLORS[10]).h;}
 document.addEventListener("click",ev=>{
@@ -833,6 +1008,13 @@ document.addEventListener("click",ev=>{
       else { state.sel=addDays(state.sel,dir*(mode==="week"?7:mode==="day"?1:30)); const x=new Date(state.sel+"T00:00"); state.year=x.getFullYear(); state.month=x.getMonth(); state.listMore=1; }
       render(); break;
     }
+    case "impgo": {
+      if(!state.imp) break; const r=impBuild(), snap=JSON.stringify(state.events);
+      r.list.forEach(x=>x.evs.forEach(e=>state.events.push(Object.assign({id:nid(),done:false,skip:[],doneOn:[],color:"",cat:x.c.cat},e,{cat:x.c.cat}))));
+      state.imp=null; const x=new Date(TODAY+"T00:00"); state.year=x.getFullYear(); state.month=x.getMonth(); state.sel=TODAY; state.calMode="month";
+      go("cal"); toast(`${r.total}件の予定を移しました`,()=>{state.events=JSON.parse(snap);}); break;
+    }
+    case "impcancel": state.imp=null; rerenderKeep(); break;
     case "listmore": state.listMore=(state.listMore||1)+1; rerenderKeep(); break;
     case "undo": if(undoFn){undoFn();undoFn=null;rerenderKeep();toast("元に戻しました");} break;
     case "today": {const x=new Date(TODAY+"T00:00"); state.year=x.getFullYear(); state.month=x.getMonth(); state.sel=TODAY; state.tlScroll=null; state.listMore=1; render(); break;}
@@ -868,6 +1050,19 @@ document.addEventListener("change",ev=>{
   const r=new FileReader(); r.onload=()=>{try{const o=JSON.parse(r.result); if(!Array.isArray(o.cats)||!Array.isArray(o.events)) throw 0;
     state.cats=o.cats; state.events=o.events; if(typeof o.showTake==="boolean") state.showTake=o.showTake; if(o.uid) uid=Math.max(uid,o.uid); render(); toast(`${o.events.length}件の予定を読み込みました`);}
     catch(e){toast("読み込めませんでした。書き出したファイルを選んでください");}}; r.readAsText(ev.target.files[0]); ev.target.value="";
+});
+document.addEventListener("change",async ev=>{
+  const t=ev.target;
+  if(t.id==="imp-range"&&state.imp){state.imp.range=t.value;rerenderKeep();return;}
+  if(t.dataset.impcat!==undefined&&state.imp){state.imp.cals[+t.dataset.impcat].cat=t.value;return;}
+  if(t.id!=="ics-file"||!t.files.length) return;
+  const files=[...t.files]; t.value="";
+  try{
+    const got=await readCalFiles(files); const cals=got.map(f=>parseIcs(f.text,f.name)).filter(c=>c.evs.length);
+    if(!cals.length){toast("予定が見つかりませんでした。Googleカレンダーで書き出したファイルを選んでください");return;}
+    cals.forEach(c=>c.cat=impCatFor(c.name)); state.imp={cals,range:"1y"}; rerenderKeep();
+    const box=$("#imp"); box&&box.scrollIntoView({block:"center"});
+  }catch(e){toast("ファイルを開けませんでした。zipの中の .ics ファイルを選んでみてください");}
 });
 document.addEventListener("toggle",ev=>{if(ev.target.id==="textbox"&&state.draft) state.draft.textOpen=ev.target.open;},true);
 let _st=null; document.addEventListener("input",()=>{clearTimeout(_st);_st=setTimeout(save,150);});
