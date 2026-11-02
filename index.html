@@ -240,13 +240,15 @@ function holidaysOf(y){
 }
 const holiday=k=>holidaysOf(+k.slice(0,4))[k];
 const _t=new Date(); let TODAY=`${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,"0")}-${String(_t.getDate()).padStart(2,"0")}`;
-const WAGE_DEFAULT={wage:1100,unit:15,dir:"floor",weekendPlus:0,earlyPlus:0,nightOn:true,nightPct:25,otOn:true,otPct:25,autoBreak:true,holOn:false,holWage:1200,travel:"none",travelAmt:0};
+const WAGE_DEFAULT={wage:1100,unit:15,dir:"floor",weekendPlus:0,earlyPlus:0,nightOn:true,nightPct:25,nightStart:"22:00",nightEnd:"05:00",otOn:true,otPct:25,autoBreak:true,holOn:false,holWage:1200,travel:"none",travelAmt:0};
+const defaultBreaks=()=>[{over:6,min:45},{over:8,min:60}];
+const wageDefaults=()=>Object.assign({},WAGE_DEFAULT,{breaks:defaultBreaks(),raises:[]});
 
 let uid=100; const nid=()=>"e"+(uid++);
 const state={
   view:"cal", back:"cal", year:_t.getFullYear(), month:_t.getMonth(), sel:TODAY, showTake:true, draft:null,
   cats:[
-    Object.assign({id:"c0",name:"バイト",color:"#F4511E",pay:true},WAGE_DEFAULT,{holOn:true,travel:"none",travelAmt:0,raises:[]}),
+    Object.assign({id:"c0",name:"バイト",color:"#F4511E",pay:true},wageDefaults(),{holOn:true}),
     {id:"c1",name:"遊び・プライベート",color:"#33B679",pay:false},
     {id:"c2",name:"大事な予定",color:"#D50000",pay:false},
     {id:"c3",name:"やること",color:"#3F51B5",pay:false}
@@ -299,7 +301,9 @@ function wageOn(wp,date){
 function shiftPay(ev,wp){
   let s=toMin(ev.start), e=toMin(ev.end); if(e<=s) e+=1440;
   const span=e-s;
-  const brk=wp.autoBreak?(span>480?60:span>360?45:0):0;
+  // 休憩：「○時間を超えたら○分」のうち、当てはまる中でいちばん長い時間のルールを使う
+  const rules=(wp.breaks||defaultBreaks()).filter(r=>span>(+r.over||0)*60).sort((a,b)=>(+b.over)-(+a.over));
+  const brk=wp.autoBreak&&rules.length?Math.max(0,+rules[0].min||0):0;
   let worked=Math.max(0,span-brk);
   const u=+wp.unit||1; worked=(wp.dir==="ceil"?Math.ceil(worked/u):Math.floor(worked/u))*u;
   const w=new Date(ev.date+"T00:00").getDay();
@@ -307,7 +311,10 @@ function shiftPay(ev,wp){
   const eff=wageOn(wp,ev.date); let base=eff.w, why=eff.from?`${md(eff.from)}からの時給`:"";
   if(wp.holOn&&sp){base=+wp.holWage||base;why=sp+"の時給";}
   else if((w===0||w===6)&&+wp.weekendPlus){base+= +wp.weekendPlus;why=(why?why+"・":"")+"土日の上乗せ";}
-  const night=Math.min(worked,ov(s,e,0,300)+ov(s,e,1320,1740)+ov(s,e,2760,3180));
+  // 深夜の時間帯（自分で決めた開始〜終了）。終了が開始より早いときは次の日の朝まで
+  const ns=toMin(wp.nightStart||"22:00"); let ne=toMin(wp.nightEnd||"05:00"); if(ne<=ns) ne+=1440;
+  let nightRaw=0; for(const d of [-1,0,1]) nightRaw+=ov(s,e,ns+d*1440,ne+d*1440);
+  const night=Math.min(worked,nightRaw);
   const early=Math.min(worked,ov(s,e,300,480)+ov(s,e,1740,1920));
   const ot=Math.max(0,worked-480);
   const basePay=worked*base/60;
@@ -461,8 +468,14 @@ function wageCard(w){
       <div class="opt"><h4>時間の切り方</h4>
         <div class="row"><label for="${w.id}-unit">単位</label><select id="${w.id}-unit" data-cat="${w.id}" data-k="unit">${[1,15,30].map(u=>`<option value="${u}" ${+w.unit===u?"selected":""}>${u}分</option>`).join("")}</select>
         <select id="${w.id}-dir" data-cat="${w.id}" data-k="dir" aria-label="端数"><option value="floor" ${w.dir==="floor"?"selected":""}>切り捨て</option><option value="ceil" ${w.dir==="ceil"?"selected":""}>切り上げ</option></select></div>
-        ${chk("autoBreak","休憩を自動で引く")}<p class="hint">6時間を超えたら45分、8時間を超えたら60分</p></div>
-      <div class="opt"><h4>割増</h4>${chk("nightOn","深夜（22〜翌5時）")}${f("nightPct","増える割合","%")}${chk("otOn","残業（1日8時間を超えた分）")}${f("otPct","増える割合","%")}</div>
+        </div>
+      <div class="opt"><h4>休憩</h4>${chk("autoBreak","休憩を自動で引く")}
+        ${(w.breaks||(w.breaks=defaultBreaks())).map((r,i)=>`<div class="row"><input type="number" id="${w.id}-brk${i}-over" data-brk="${w.id}" data-bi="${i}" data-bk="over" value="${r.over}" min="0" step="0.5" style="width:4.2em" aria-label="何時間を超えたら">時間を超えたら<input type="number" id="${w.id}-brk${i}-min" data-brk="${w.id}" data-bi="${i}" data-bk="min" value="${r.min}" min="0" step="5" style="width:4.2em" aria-label="何分の休憩">分<button type="button" class="small" data-delbrk="${w.id}" data-bi="${i}">消す</button></div>`).join("")}
+        <div class="row"><button type="button" class="small" data-addbrk="${w.id}">＋ ルールを追加</button></div>
+        <p class="hint">勤務時間が長いほど、当てはまるいちばん長い休憩が引かれます。</p></div>
+      <div class="opt"><h4>割増</h4>${chk("nightOn","深夜割増")}
+        <div class="row"><input type="time" id="${w.id}-nightStart" data-cat="${w.id}" data-k="nightStart" value="${w.nightStart||"22:00"}" aria-label="深夜割増が始まる時刻">〜<input type="time" id="${w.id}-nightEnd" data-cat="${w.id}" data-k="nightEnd" value="${w.nightEnd||"05:00"}" aria-label="深夜割増が終わる時刻"></div>
+        <p class="hint">この時間に働いた分が割増になります。職場に合わせて変えてください。</p>${f("nightPct","増える割合","%")}${chk("otOn","残業（1日8時間を超えた分）")}${f("otPct","増える割合","%")}</div>
       <div class="opt"><h4>祝日・年末年始</h4>${chk("holOn","この日だけ時給を変える")}${f("holWage","その日の時給","円")}</div>
       <div class="opt"><h4>交通費（給料とは別）</h4>
         <div class="row"><label for="${w.id}-travel">払われ方</label><select id="${w.id}-travel" data-cat="${w.id}" data-k="travel"><option value="none" ${w.travel==="none"?"selected":""}>なし</option><option value="day" ${w.travel==="day"?"selected":""}>出勤1日ごと</option><option value="pass" ${w.travel==="pass"?"selected":""}>定期代（月ごと）</option></select></div>
@@ -580,6 +593,8 @@ document.addEventListener("click",ev=>{
   }
   if(D.ccolor){const c=catOf(D.id);if(c){c.color=D.ccolor;rerenderKeep();}return;}
   if(D.addraise){const c=catOf(D.addraise);if(c){c.raises=c.raises||[];c.raises.push({id:nid(),from:TODAY,wage:wageOn(c,"9999-12-31").w+50});rerenderKeep();toast("昇給した日と新しい時給を入れてください");}return;}
+  if(D.addbrk){const c=catOf(D.addbrk);if(c){c.breaks=c.breaks||defaultBreaks();const last=c.breaks.reduce((m,r)=>Math.max(m,+r.over||0),0);c.breaks.push({over:last+2,min:60});rerenderKeep();}return;}
+  if(D.delbrk){const c=catOf(D.delbrk);if(c&&c.breaks){c.breaks.splice(+D.bi,1);rerenderKeep();}return;}
   if(D.delraise){const c=catOf(D.delraise);if(c){c.raises=(c.raises||[]).filter(r=>r.id!==D.rid);rerenderKeep();}return;}
   if(D.delcat){
     if(state.cats.length<2) return; const id=D.delcat; state.cats=state.cats.filter(c=>c.id!==id);
@@ -608,7 +623,7 @@ document.addEventListener("click",ev=>{
       const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`shift-backup-${TODAY}.json`; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(()=>URL.revokeObjectURL(a.href),2000); toast("ファイルに書き出しました"); break;
     }
-    case "addwp": state.cats.push(Object.assign({id:nid(),name:"新しい働く場所",color:freeColor(),pay:true},WAGE_DEFAULT)); render(); break;
+    case "addwp": state.cats.push(Object.assign({id:nid(),name:"新しい働く場所",color:freeColor(),pay:true},wageDefaults())); render(); break;
     case "addcat": {state.cats.push({id:nid(),name:"",color:freeColor(),pay:false}); render(); const ins=document.querySelectorAll('.crow-top input[type=text]'); const last=ins[ins.length-1]; if(last){last.focus();last.scrollIntoView({block:"center"});} break;}
   }
 });
@@ -619,7 +634,9 @@ document.addEventListener("change",ev=>{
     catch(e){toast("読み込めませんでした。書き出したファイルを選んでください");}}; r.readAsText(ev.target.files[0]); ev.target.value="";
 });
 document.addEventListener("toggle",ev=>{if(ev.target.id==="textbox"&&state.draft) state.draft.textOpen=ev.target.open;},true);
-let _st=null; document.addEventListener("input",()=>{clearTimeout(_st);_st=setTimeout(save,400);});
+let _st=null; document.addEventListener("input",()=>{clearTimeout(_st);_st=setTimeout(save,150);});
+window.addEventListener("pagehide",()=>save());
+document.addEventListener("visibilitychange",()=>{if(document.hidden) save();});
 document.addEventListener("input",ev=>{
   const t=ev.target, d=state.draft;
   if(t.dataset.d&&d){
@@ -629,10 +646,11 @@ document.addEventListener("input",ev=>{
   }
   if(t.dataset.dcustom!==undefined||t.dataset.ccustom){const l=t.closest(".custom");l.style.setProperty("--cc",t.value);l.classList.add("on");return;}
   if(t.id==="showTake"){state.showTake=t.checked;$("#pay-sum").innerHTML=paySummary(monthTotals());return;}
+  if(t.dataset.brk){const c=catOf(t.dataset.brk);const r=c&&(c.breaks||[])[+t.dataset.bi];if(r){r[t.dataset.bk]=+t.value||0;$("#pay-sum").innerHTML=paySummary(monthTotals());$("#pay-list").innerHTML=payList(monthShifts());}return;}
   if(t.dataset.raise){const c=catOf(t.dataset.raise);const r=c&&(c.raises||[]).find(x=>x.id===t.dataset.rid);if(r){r[t.dataset.rk]=t.dataset.rk==="wage"?(+t.value||0):t.value;$("#pay-sum").innerHTML=paySummary(monthTotals());$("#pay-list").innerHTML=payList(monthShifts());}return;}
   if(t.dataset.cat&&t.dataset.k){
     const c=catOf(t.dataset.cat); if(!c) return; const k=t.dataset.k;
-    if(k==="pay"){c.pay=t.checked; if(c.pay&&c.wage===undefined) Object.assign(c,WAGE_DEFAULT); return;}
+    if(k==="pay"){c.pay=t.checked; if(c.pay&&c.wage===undefined) Object.assign(c,wageDefaults()); return;}
     c[k]=t.type==="checkbox"?t.checked:(t.type==="number"?(t.value===""?0:+t.value):t.value);
     if(state.view==="pay"){
       if(k==="travel"){rerenderKeep();return;}
