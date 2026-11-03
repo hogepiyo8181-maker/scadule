@@ -221,6 +221,8 @@ details.card>summary{cursor:pointer;font-weight:700}
 .imp .isel{flex-wrap:nowrap;gap:8px}
 .imp .isel select{flex:1;min-width:0}
 .imp-titles>summary{cursor:pointer;font-weight:700}
+.imp-cal{display:grid;gap:6px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
+.sw.shades button{width:28px;height:28px}
 .warn{display:block;color:var(--danger);font-weight:700;font-size:.85rem;margin:4px 0 0}
 .warn-card{border-color:var(--danger)}
 .warn-card h3{color:var(--danger)}
@@ -279,7 +281,12 @@ details.card>summary{cursor:pointer;font-weight:700}
 (function(){
 const COLORS=[{n:"トマト",h:"#D50000"},{n:"フラミンゴ",h:"#E67C73"},{n:"ミカン",h:"#F4511E"},{n:"バナナ",h:"#F6BF26"},{n:"セージ",h:"#33B679"},{n:"バジル",h:"#0B8043"},{n:"ピーコック",h:"#039BE5"},{n:"ブルーベリー",h:"#3F51B5"},{n:"ラベンダー",h:"#7986CB"},{n:"グレープ",h:"#8E24AA"},{n:"グラファイト",h:"#616161"}];
 const GRAY="#616161";
-const colorName=h=>{const c=COLORS.find(c=>c.h.toLowerCase()===String(h).toLowerCase());return c?c.n:"自分で選んだ色"};
+const mixHex=(h,to,p)=>{const a=h.slice(1).match(/../g).map(x=>parseInt(x,16)),b=to.slice(1).match(/../g).map(x=>parseInt(x,16));return "#"+a.map((v,i)=>Math.round(v+(b[i]-v)*p).toString(16).padStart(2,"0")).join("").toUpperCase();};
+const SHADES=[["とても明るめ","#FFFFFF",.5],["明るめ","#FFFFFF",.28],["","",0],["暗め","#000000",.22],["とても暗め","#000000",.4]];
+const shadesOf=b=>SHADES.map(([n,to,p])=>({n,h:to?mixHex(b,to,p):b.toUpperCase()}));
+// 今の色にいちばん近い基本の色（似た色の元にする）
+const baseColor=h=>{h=String(h).toUpperCase(); const hit=COLORS.find(c=>shadesOf(c.h).some(x=>x.h===h)); if(hit) return hit; const rgb=x=>x.slice(1).match(/../g).map(v=>parseInt(v,16)); const t=rgb(/^#[0-9A-F]{6}$/.test(h)?h:GRAY); return COLORS.slice().sort((a,b)=>{const d=c=>rgb(c.h).reduce((s,v,i)=>s+(v-t[i])**2,0);return d(a)-d(b);})[0];};
+const colorName=h=>{const H=String(h).toUpperCase(); const c=COLORS.find(c=>c.h.toUpperCase()===H); if(c) return c.n; for(const b of COLORS){const x=shadesOf(b.h).find(x=>x.h===H&&x.n); if(x) return `${b.n}（${x.n}）`;} return "自分で選んだ色";};
 const WD=["日","月","火","水","木","金","土"];
 const _hol={};
 function holidaysOf(y){
@@ -678,10 +685,11 @@ function renderColors(){
     <p class="note">カレンダーや予定の文字が、すべてこの大きさになります。</p></section>
   <section class="card"><h3>何色を何の予定にするか</h3>
     <p class="note">色ごとに、どんな予定に使うかを自分で決められます。たとえば「オレンジ＝仕事系」「緑＝遊び系」のように名前を付けてください。仕事の種類は「給料を計算する」をオンにすると、給料の画面に出ます。</p></section>
-  ${state.cats.map(c=>{const custom=!COLORS.some(x=>x.h.toLowerCase()===c.color.toLowerCase());const used=state.events.filter(e=>e.cat===c.id).length;
+  ${state.cats.map(c=>{const custom=colorName(c.color)==="自分で選んだ色";const used=state.events.filter(e=>e.cat===c.id).length;
     return `<section class="crow" style="${cv(c.color)}">
     <div class="crow-top"><i class="big-dot" aria-hidden="true"></i><input type="text" id="${c.id}-name" data-cat="${c.id}" data-k="name" value="${esc(c.name)}" aria-label="種類の名前" placeholder="例：仕事系"><button type="button" class="small" data-delcat="${c.id}" ${state.cats.length<2?"disabled":""}>消す</button></div>
     <div class="sw" role="group" aria-label="色">${COLORS.map(x=>`<button type="button" style="--cc:${x.h}" title="${x.n}" aria-label="${x.n}" data-ccolor="${x.h}" data-id="${c.id}" aria-pressed="${x.h===c.color}"></button>`).join("")}<label class="custom${custom?" on":""}" style="--cc:${c.color}" title="自分で色を選ぶ"><input type="color" id="cp-${c.id}" data-ccustom="${c.id}" value="${c.color.toLowerCase()}" aria-label="自分で色を選ぶ"><span aria-hidden="true">＋</span></label></div>
+    <div class="sw shades" role="group" aria-label="似た色"><span class="hint">似た色：</span>${(b=>shadesOf(b.h).map(x=>`<button type="button" style="--cc:${x.h}" title="${b.n}${x.n?`（${x.n}）`:""}" aria-label="${b.n}${x.n?`（${x.n}）`:""}" data-ccolor="${x.h}" data-id="${c.id}" aria-pressed="${x.h===String(c.color).toUpperCase()}"></button>`).join(""))(baseColor(c.color))}</div>
     <div class="row" style="justify-content:space-between"><span class="sw-name">${colorName(c.color)}・予定${used}件</span><label class="check"><input type="checkbox" id="${c.id}-pay" data-cat="${c.id}" data-k="pay" ${c.pay?"checked":""}>給料を計算する</label></div>
   </section>`}).join("")}
   <div class="row"><button type="button" class="btn" data-act="addcat">＋ 種類を追加</button></div>
@@ -692,6 +700,7 @@ function renderColors(){
       <p class="note">Googleカレンダーで書き出したファイル（.zip か .ics）を選ぶと、その予定をこのアプリに入れられます。</p>
       <div class="row"><label class="btn" for="ics-file" style="display:inline-flex;align-items:center;cursor:pointer">書き出したファイルを選ぶ</label><input type="file" id="ics-file" accept=".ics,.zip,text/calendar,application/zip,application/x-zip-compressed" multiple hidden></div>
       ${renderImport()}
+      ${state.events.some(e=>e.ics)?`<div class="row"><button type="button" class="small" data-act="impclear">移した予定をまとめて消す（${state.events.filter(e=>e.ics).length}件）</button></div><p class="hint">移し方をまちがえたときは、まとめて消してからもう一度移せます。自分で入れた予定は消えません。</p>`:""}
     </details>
   </section></div>`;
 }
@@ -965,20 +974,31 @@ function icsToEvents(cal,range){
   }
   return out;
 }
+// カレンダーの名前が種類の名前と同じなら、その種類（なければ null）
 function impCatFor(name){
-  const n=(name||"").trim(); const hit=state.cats.find(c=>c.name&&n&&(c.name===n||n.includes(c.name)||c.name.includes(n)));
-  return (hit||state.cats.find(c=>!c.pay)||state.cats[0]).id;
+  const n=(name||"").trim().toLowerCase(); const hit=n&&state.cats.find(c=>(c.name||"").trim().toLowerCase()===n);
+  return hit?hit.id:null;
 }
 // 名前に種類の名前が入っていれば、その種類にする（例：「バイト（駅前）」→ バイト）
 const impTitleCat=t=>{const T=String(t).trim().toLowerCase();const hit=state.cats.filter(c=>{const n=(c.name||"").trim().toLowerCase();return n&&(n===T||(n.length>=2&&T.includes(n)));}).sort((a,b)=>b.name.length-a.name.length)[0];return hit&&hit.id;};
+// 名前が合わない予定の入れ先：仕事（給料を計算する）でなく、予定の名前とも合わない種類を選ぶ
+function impDefaultCat(cals){
+  const ts=new Set(); cals.forEach(c=>c.evs.forEach(v=>{if(v.SUMMARY) ts.add(icsUnesc(v.SUMMARY.v));}));
+  const used=new Set([...ts].map(impTitleCat).filter(Boolean)), free=state.cats.filter(c=>!c.pay&&!used.has(c.id));
+  return (free.find(c=>/その他|遊び|プライベート|予定|個人/.test(c.name||""))||free[0]||state.cats.find(c=>!c.pay)||state.cats[0]).id;
+}
 function impBuild(){
   const im=state.imp, have=new Map(), groups=new Map(), was={};
   state.events.forEach(e=>{if(e.ics) have.set(e.ics,e);});
   const list=im.cals.map(c=>{const evs=[], dups=[];
     icsToEvents(c,im.range).forEach(e=>{const o=have.get(e.ics); if(o&&!was[e.title]) was[e.title]=o.cat; (o?dups:evs).push(e); const g=groups.get(e.title)||{n:0,ad:0,cal:c}; g.n++; if(e.allDay) g.ad++; groups.set(e.title,g);});
     return {c,evs,dups};});
-  const titles=[...groups].sort((a,b)=>b[1].n-a[1].n||a[0].localeCompare(b[0],"ja")).map(([t,g])=>({t,n:g.n,ad:g.ad,cat:(im.titles||{})[t]||(catOf(was[t])&&was[t])||impTitleCat(t)||g.cal.cat}));
-  return {list,titles,catOfTitle:Object.fromEntries(titles.map(x=>[x.t,x.cat])),have,dup:list.reduce((s,x)=>s+x.dups.length,0),total:list.reduce((s,x)=>s+x.evs.length,0)};
+  // 名前で種類が決まるもの（自分で選んだ・前に移したときの種類・種類と同じ名前）と、カレンダーの入れ先に従うもの
+  const titles=[...groups].sort((a,b)=>b[1].n-a[1].n||a[0].localeCompare(b[0],"ja")).map(([t,g])=>{const own=(im.titles||{})[t]||impTitleCat(t)||(catOf(was[t])&&was[t]);return {t,n:g.n,ad:g.ad,own:own||"",cat:own||g.cal.cat};});
+  const catOfTitle={}; titles.forEach(x=>{if(x.own) catOfTitle[x.t]=x.own;});
+  list.forEach(x=>{const all=[...x.evs,...x.dups]; x.named=all.filter(e=>catOfTitle[e.title]); x.rest=all.filter(e=>!catOfTitle[e.title]);});
+  const nameCats=new Set(titles.filter(x=>x.own&&impTitleCat(x.t)===x.own).map(x=>x.own));
+  return {list,titles,catOfTitle,nameCats,have,dup:list.reduce((s,x)=>s+x.dups.length,0),total:list.reduce((s,x)=>s+x.evs.length,0)};
 }
 function renderImport(){
   const im=state.imp; if(!im) return "";
@@ -989,11 +1009,16 @@ function renderImport(){
   const recolor=im.recolor!==false, can=r.total||(r.dup&&recolor);
   return `<div class="imp" id="imp">
     <p><b>${r.total}件の予定を移せます</b>${r.dup?`（すでに移した${r.dup}件は重ねて入れません）`:""}</p>
-    ${r.list.map((x,i)=>{const nm=dupName(x.c.name)?`${x.c.name}（${seen[x.c.name]=(seen[x.c.name]||0)+1}つ目）`:x.c.name, ex=[...new Set([...x.evs,...x.dups].map(e=>e.title))].slice(0,3).join("、");
-      return `<div class="imp-row"><span>「${esc(nm)}」の${x.evs.length+x.dups.length}件${ex?`（例：${esc(ex)}）`:""}は、ふだんはこの種類（色）にする</span><div class="row isel">${dot(x.c.cat)}<select data-impcat="${i}" aria-label="${esc(nm)}の予定の種類">${opts(x.c.cat)}</select></div></div>`;}).join("")}
+    ${r.list.map((x,i)=>{const nm=dupName(x.c.name)?`${x.c.name}（${seen[x.c.name]=(seen[x.c.name]||0)+1}つ目）`:x.c.name;
+      const ncat=[...new Set(x.named.map(e=>(catOf(r.catOfTitle[e.title])||{}).name))].filter(Boolean), ex=[...new Set(x.rest.map(e=>e.title))].slice(0,3).join("、");
+      const dc=catOf(x.c.cat)||{}, risky=x.rest.length&&(dc.pay||r.nameCats.has(x.c.cat));
+      return `<div class="imp-cal"><p><b>「${esc(nm)}」の${x.named.length+x.rest.length}件</b></p>
+        ${x.named.length?`<p class="hint">名前で種類が決まる${x.named.length}件 → ${esc(ncat.slice(0,4).join("・"))}${ncat.length>4?" など":""}</p>`:""}
+        ${x.rest.length?`<div class="imp-row"><span>名前が合わない のこり${x.rest.length}件${ex?`（例：${esc(ex)}）`:""}の入れ先</span><div class="row isel">${dot(x.c.cat)}<select data-impcat="${i}" aria-label="${esc(nm)}の、名前が合わない予定の入れ先">${opts(x.c.cat)}</select></div>
+        ${risky?`<span class="warn">${WARN} ${dc.pay?`「${esc(dc.name)}」は給料を計算する種類なので、のこりの${x.rest.length}件もバイトとして給料に入ってしまいます。`:`「${esc(dc.name)}」と名前が合わない予定まで「${esc(dc.name)}」になります。`}仕事でない種類（遊び・プライベートなど）を選んでください。</span>`:""}</div>`:""}</div>`;}).join("")}
     <details class="imp-titles" ${im.titlesOpen?"open":""}><summary>予定の名前ごとに種類（色）を分ける（${r.titles.length}通りの名前）</summary>
       <p class="note">Googleカレンダーの書き出しファイルには、予定の色が入っていません。そのかわり、ここで予定の名前ごとに種類（色）を選べます。同じ名前の予定は、まとめてその色になります。</p>
-      <ul class="tlist">${r.titles.map((x,i)=>`<li><div class="tname-row"><span class="tname">${esc(x.t)}</span><span class="tcount">${x.n}件</span></div><div class="row isel">${dot(x.cat)}<select data-imptitle="${i}" aria-label="「${esc(x.t)}」の種類">${opts(x.cat)}</select></div>${x.ad&&catOf(x.cat)&&catOf(x.cat).pay?`<span class="warn">${WARN} このうち${x.ad}件は終日なので、時間を入れるまで給料に入りません</span>`:""}</li>`).join("")}</ul>
+      <ul class="tlist">${r.titles.map((x,i)=>`<li><div class="tname-row"><span class="tname">${esc(x.t)}</span><span class="tcount">${x.n}件${x.own?"":"・入れ先のまま"}</span></div><div class="row isel">${dot(x.cat)}<select data-imptitle="${i}" aria-label="「${esc(x.t)}」の種類">${opts(x.cat)}</select></div>${x.ad&&catOf(x.cat)&&catOf(x.cat).pay?`<span class="warn">${WARN} このうち${x.ad}件は終日なので、時間を入れるまで給料に入りません</span>`:""}</li>`).join("")}</ul>
     </details>
     ${r.dup?`<label class="check"><input type="checkbox" id="imp-recolor" ${recolor?"checked":""}>すでに移した${r.dup}件の種類（色）も、ここで選んだものに直す</label>`:""}
     <div class="imp-row"><label for="imp-range" class="lbl">いつからの予定を移すか</label><select id="imp-range">${[["1y","1年前から"],["now","今日から"],["all","すべて"]].map(([v,l])=>`<option value="${v}" ${im.range===v?"selected":""}>${l}</option>`).join("")}</select></div>
@@ -1061,6 +1086,7 @@ document.addEventListener("click",ev=>{
       go("cal"); toast((r.total?`${r.total}件の予定を移しました`:"")+(fixed?`${r.total?"（":""}${fixed}件の種類を直しました${r.total?"）":""}`:"")||"変わった予定はありませんでした",()=>{state.events=JSON.parse(snap);}); break;
     }
     case "impcancel": state.imp=null; rerenderKeep(); break;
+    case "impclear": {const snap=JSON.stringify(state.events), n=state.events.filter(e=>e.ics).length; state.events=state.events.filter(e=>!e.ics); rerenderKeep(); toast(`移した予定${n}件を消しました`,()=>{state.events=JSON.parse(snap);}); break;}
     case "listmore": state.listMore=(state.listMore||1)+1; rerenderKeep(); break;
     case "undo": if(undoFn){undoFn();undoFn=null;rerenderKeep();toast("元に戻しました");} break;
     case "today": {const x=new Date(TODAY+"T00:00"); state.year=x.getFullYear(); state.month=x.getMonth(); state.sel=TODAY; state.tlScroll=null; state.listMore=1; render(); break;}
@@ -1108,7 +1134,7 @@ document.addEventListener("change",async ev=>{
   try{
     const got=await readCalFiles(files); const cals=got.map(f=>parseIcs(f.text,f.name)).filter(c=>c.evs.length);
     if(!cals.length){toast("予定が見つかりませんでした。Googleカレンダーで書き出したファイルを選んでください");return;}
-    cals.forEach(c=>c.cat=impCatFor(c.name)); state.imp={cals,range:"1y",titles:{}}; rerenderKeep();
+    const dflt=impDefaultCat(cals); cals.forEach(c=>c.cat=impCatFor(c.name)||dflt); state.imp={cals,range:"1y",titles:{}}; rerenderKeep();
     const box=$("#imp"); box&&box.scrollIntoView({block:"center"});
   }catch(e){toast("ファイルを開けませんでした。zipの中の .ics ファイルを選んでみてください");}
 });
