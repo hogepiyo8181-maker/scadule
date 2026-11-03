@@ -218,6 +218,14 @@ details.card>summary{cursor:pointer;font-weight:700}
 .imp p{margin:0}
 .imp-row{display:grid;gap:4px}
 .imp select{width:100%}
+.imp .isel{flex-wrap:nowrap;gap:8px}
+.imp .isel select{flex:1;min-width:0}
+.imp-titles>summary{cursor:pointer;font-weight:700}
+.tlist{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:12px}
+.tlist li{display:grid;gap:4px}
+.tname-row{display:flex;justify-content:space-between;gap:8px}
+.tname{font-weight:700;overflow-wrap:anywhere}
+.tcount{color:var(--muted);flex:none}
 .preview{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
 .preview li{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:.85rem;font-variant-numeric:tabular-nums}
 
@@ -940,20 +948,36 @@ function impCatFor(name){
   const n=(name||"").trim(); const hit=state.cats.find(c=>c.name&&n&&(c.name===n||n.includes(c.name)||c.name.includes(n)));
   return (hit||state.cats.find(c=>!c.pay)||state.cats[0]).id;
 }
+// 名前に種類の名前が入っていれば、その種類にする（例：「バイト（駅前）」→ バイト）
+const impTitleCat=t=>{const hit=state.cats.find(c=>c.name&&c.name.length>=2&&t.includes(c.name));return hit&&hit.id;};
 function impBuild(){
-  const im=state.imp, have=new Set(state.events.map(e=>e.ics).filter(Boolean)); let dup=0;
-  const list=im.cals.map(c=>{const evs=icsToEvents(c,im.range).filter(e=>{if(have.has(e.ics)){dup++;return false;}return true;});return {c,evs};});
-  return {list,dup,total:list.reduce((s,x)=>s+x.evs.length,0)};
+  const im=state.imp, have=new Map(), groups=new Map(), was={};
+  state.events.forEach(e=>{if(e.ics) have.set(e.ics,e);});
+  const list=im.cals.map(c=>{const evs=[], dups=[];
+    icsToEvents(c,im.range).forEach(e=>{const o=have.get(e.ics); if(o&&!was[e.title]) was[e.title]=o.cat; (o?dups:evs).push(e); const g=groups.get(e.title)||{n:0,cal:c}; g.n++; groups.set(e.title,g);});
+    return {c,evs,dups};});
+  const titles=[...groups].sort((a,b)=>b[1].n-a[1].n||a[0].localeCompare(b[0],"ja")).map(([t,g])=>({t,n:g.n,cat:(im.titles||{})[t]||(catOf(was[t])&&was[t])||impTitleCat(t)||g.cal.cat}));
+  return {list,titles,catOfTitle:Object.fromEntries(titles.map(x=>[x.t,x.cat])),have,dup:list.reduce((s,x)=>s+x.dups.length,0),total:list.reduce((s,x)=>s+x.evs.length,0)};
 }
 function renderImport(){
   const im=state.imp; if(!im) return "";
-  const r=impBuild();
+  const r=impBuild(); im.tlist=r.titles.map(x=>x.t);
+  const opts=cur=>state.cats.map(c=>`<option value="${c.id}" ${c.id===cur?"selected":""}>${esc(c.name||"名前なし")}</option>`).join("");
+  const dot=id=>`<i class="dot" style="${cv((catOf(id)||{color:GRAY}).color)}" aria-hidden="true"></i>`;
+  const seen={}, dupName=n=>im.cals.filter(c=>c.name===n).length>1;
+  const recolor=im.recolor!==false, can=r.total||(r.dup&&recolor);
   return `<div class="imp" id="imp">
-    <p><b>${r.total}件の予定を移せます</b>${r.dup?`（すでに入っている${r.dup}件は入れません）`:""}</p>
-    ${r.list.map((x,i)=>`<div class="imp-row"><span>「${esc(x.c.name)}」の${x.evs.length}件は、この種類（色）にする</span><select data-impcat="${i}" aria-label="${esc(x.c.name)}の予定の種類">${state.cats.map(c=>`<option value="${c.id}" ${c.id===x.c.cat?"selected":""}>${esc(c.name||"名前なし")}</option>`).join("")}</select></div>`).join("")}
+    <p><b>${r.total}件の予定を移せます</b>${r.dup?`（すでに移した${r.dup}件は重ねて入れません）`:""}</p>
+    ${r.list.map((x,i)=>{const nm=dupName(x.c.name)?`${x.c.name}（${seen[x.c.name]=(seen[x.c.name]||0)+1}つ目）`:x.c.name, ex=[...new Set([...x.evs,...x.dups].map(e=>e.title))].slice(0,3).join("、");
+      return `<div class="imp-row"><span>「${esc(nm)}」の${x.evs.length+x.dups.length}件${ex?`（例：${esc(ex)}）`:""}は、ふだんはこの種類（色）にする</span><div class="row isel">${dot(x.c.cat)}<select data-impcat="${i}" aria-label="${esc(nm)}の予定の種類">${opts(x.c.cat)}</select></div></div>`;}).join("")}
+    <details class="imp-titles" ${im.titlesOpen?"open":""}><summary>予定の名前ごとに種類（色）を分ける（${r.titles.length}通りの名前）</summary>
+      <p class="note">Googleカレンダーの書き出しファイルには、予定の色が入っていません。そのかわり、ここで予定の名前ごとに種類（色）を選べます。同じ名前の予定は、まとめてその色になります。</p>
+      <ul class="tlist">${r.titles.map((x,i)=>`<li><div class="tname-row"><span class="tname">${esc(x.t)}</span><span class="tcount">${x.n}件</span></div><div class="row isel">${dot(x.cat)}<select data-imptitle="${i}" aria-label="「${esc(x.t)}」の種類">${opts(x.cat)}</select></div></li>`).join("")}</ul>
+    </details>
+    ${r.dup?`<label class="check"><input type="checkbox" id="imp-recolor" ${recolor?"checked":""}>すでに移した${r.dup}件の種類（色）も、ここで選んだものに直す</label>`:""}
     <div class="imp-row"><label for="imp-range" class="lbl">いつからの予定を移すか</label><select id="imp-range">${[["1y","1年前から"],["now","今日から"],["all","すべて"]].map(([v,l])=>`<option value="${v}" ${im.range===v?"selected":""}>${l}</option>`).join("")}</select></div>
     <p class="note">くり返しの予定は、できるだけくり返しのまま入ります。「第2火曜日」のような形のものは、2年先までの1回ずつの予定として入ります。通知や、Googleカレンダーとの同期はありません。</p>
-    <div class="row"><button type="button" class="btn primary" data-act="impgo" ${r.total?"":"disabled"}>予定を移す</button><button type="button" class="btn" data-act="impcancel">やめる</button></div>
+    <div class="row"><button type="button" class="btn primary" data-act="impgo" ${can?"":"disabled"}>${r.total?"予定を移す":"種類（色）を直す"}</button><button type="button" class="btn" data-act="impcancel">やめる</button></div>
   </div>`;
 }
 
@@ -1009,10 +1033,11 @@ document.addEventListener("click",ev=>{
       render(); break;
     }
     case "impgo": {
-      if(!state.imp) break; const r=impBuild(), snap=JSON.stringify(state.events);
-      r.list.forEach(x=>x.evs.forEach(e=>state.events.push(Object.assign({id:nid(),done:false,skip:[],doneOn:[],color:"",cat:x.c.cat},e,{cat:x.c.cat}))));
+      if(!state.imp) break; const r=impBuild(), snap=JSON.stringify(state.events), tc=e=>r.catOfTitle[e.title]; let fixed=0;
+      r.list.forEach(x=>x.evs.forEach(e=>state.events.push(Object.assign({id:nid(),done:false,skip:[],doneOn:[],color:""},e,{cat:tc(e)||x.c.cat}))));
+      if(state.imp.recolor!==false) r.list.forEach(x=>x.dups.forEach(e=>{const o=r.have.get(e.ics), c=tc(e)||x.c.cat; if(o&&o.cat!==c){o.cat=c;fixed++;}}));
       state.imp=null; const x=new Date(TODAY+"T00:00"); state.year=x.getFullYear(); state.month=x.getMonth(); state.sel=TODAY; state.calMode="month";
-      go("cal"); toast(`${r.total}件の予定を移しました`,()=>{state.events=JSON.parse(snap);}); break;
+      go("cal"); toast((r.total?`${r.total}件の予定を移しました`:"")+(fixed?`${r.total?"（":""}${fixed}件の種類を直しました${r.total?"）":""}`:"")||"変わった予定はありませんでした",()=>{state.events=JSON.parse(snap);}); break;
     }
     case "impcancel": state.imp=null; rerenderKeep(); break;
     case "listmore": state.listMore=(state.listMore||1)+1; rerenderKeep(); break;
@@ -1054,16 +1079,19 @@ document.addEventListener("change",ev=>{
 document.addEventListener("change",async ev=>{
   const t=ev.target;
   if(t.id==="imp-range"&&state.imp){state.imp.range=t.value;rerenderKeep();return;}
-  if(t.dataset.impcat!==undefined&&state.imp){state.imp.cals[+t.dataset.impcat].cat=t.value;return;}
+  if(t.dataset.impcat!==undefined&&state.imp){state.imp.cals[+t.dataset.impcat].cat=t.value;rerenderKeep();return;}
+  if(t.dataset.imptitle!==undefined&&state.imp){state.imp.titles[state.imp.tlist[+t.dataset.imptitle]]=t.value;const d=t.previousElementSibling;if(d) d.style.cssText=cv((catOf(t.value)||{color:GRAY}).color);return;}
+  if(t.id==="imp-recolor"&&state.imp){state.imp.recolor=t.checked;rerenderKeep();return;}
   if(t.id!=="ics-file"||!t.files.length) return;
   const files=[...t.files]; t.value="";
   try{
     const got=await readCalFiles(files); const cals=got.map(f=>parseIcs(f.text,f.name)).filter(c=>c.evs.length);
     if(!cals.length){toast("予定が見つかりませんでした。Googleカレンダーで書き出したファイルを選んでください");return;}
-    cals.forEach(c=>c.cat=impCatFor(c.name)); state.imp={cals,range:"1y"}; rerenderKeep();
+    cals.forEach(c=>c.cat=impCatFor(c.name)); state.imp={cals,range:"1y",titles:{}}; rerenderKeep();
     const box=$("#imp"); box&&box.scrollIntoView({block:"center"});
   }catch(e){toast("ファイルを開けませんでした。zipの中の .ics ファイルを選んでみてください");}
 });
+document.addEventListener("toggle",ev=>{if(ev.target.classList&&ev.target.classList.contains("imp-titles")&&state.imp) state.imp.titlesOpen=ev.target.open;},true);
 document.addEventListener("toggle",ev=>{if(ev.target.id==="textbox"&&state.draft) state.draft.textOpen=ev.target.open;},true);
 let _st=null; document.addEventListener("input",()=>{clearTimeout(_st);_st=setTimeout(save,150);});
 window.addEventListener("pagehide",()=>save());
