@@ -221,6 +221,9 @@ details.card>summary{cursor:pointer;font-weight:700}
 .imp .isel{flex-wrap:nowrap;gap:8px}
 .imp .isel select{flex:1;min-width:0}
 .imp-titles>summary{cursor:pointer;font-weight:700}
+.warn{display:block;color:var(--danger);font-weight:700;font-size:.85rem;margin:4px 0 0}
+.warn-card{border-color:var(--danger)}
+.warn-card h3{color:var(--danger)}
 .tlist{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:12px}
 .tlist li{display:grid;gap:4px}
 .tname-row{display:flex;justify-content:space-between;gap:8px}
@@ -343,6 +346,9 @@ const hm=m=>`${Math.floor(m/60)}時間${m%60?(m%60)+"分":""}`;
 const md=k=>{const d=new Date(k+"T00:00");return `${d.getMonth()+1}/${d.getDate()}`};
 const jdate=k=>{const d=new Date(k+"T00:00");return `${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`};
 const isPayShift=e=>e.type==="event"&&!e.allDay&&catOf(e.cat)&&catOf(e.cat).pay;
+// 給料を計算する種類なのに終日で入っていて、時間がないため給料に入らない予定
+const isNoTimeShift=e=>e.type==="event"&&e.allDay&&catOf(e.cat)&&catOf(e.cat).pay;
+const WARN="⚠︎";
 const sortItems=(a,b)=>(a.allDay===b.allDay?0:a.allDay?-1:1)||(a.allDay?0:a.start.localeCompare(b.start))||(a.type===b.type?0:a.type==="event"?-1:1);
 const addDays=(k,n)=>{const d=new Date(k+"T00:00");d.setDate(d.getDate()+n);return ds(d.getFullYear(),d.getMonth(),d.getDate());};
 const diffDays=(a,b)=>Math.round((new Date(b+"T00:00")-new Date(a+"T00:00"))/864e5);
@@ -420,6 +426,11 @@ function shiftPay(ev,wp){
   const earlyPay=early*(+wp.earlyPlus||0)/60;
   return {worked,brk,base,why,basePay,nightPay,otPay,earlyPay,pay:Math.floor(basePay+nightPay+otPay+earlyPay)};
 }
+function monthNoTime(){
+  const y=state.year,m=state.month,dim=new Date(y,m+1,0).getDate(),seen=new Set(),out=[];
+  for(let x=1;x<=dim;x++) occurrencesOn(ds(y,m,x)).filter(isNoTimeShift).forEach(o=>{const k=o.id+"|"+o.occ;if(!seen.has(k)){seen.add(k);out.push(o);}});
+  return out;
+}
 function monthTotals(){
   const per={}; const wps=state.cats.filter(c=>c.pay);
   wps.forEach(w=>per[w.id]={pay:0,days:new Set(),travel:0});
@@ -427,7 +438,7 @@ function monthTotals(){
   let pay=0,travel=0;
   wps.forEach(w=>{const p=per[w.id];p.travel=w.travel==="day"?p.days.size*(+w.travelAmt||0):(w.travel==="pass"&&p.days.size?(+w.travelAmt||0):0);pay+=p.pay;travel+=p.travel;});
   const tax=pay<88000?0:Math.floor((pay-88000)*0.0511/10)*10;
-  return {per,pay,travel,tax,wps};
+  return {per,pay,travel,tax,wps,noTime:monthNoTime().length};
 }
 
 /* ---------- screens ---------- */
@@ -439,7 +450,7 @@ function chip(o,k){
   if(o.type==="task") return `<span class="chip task${o.done?" done":""}" style="${c}" ${da}>${o.done?"✓":"○"}${esc(o.title)}</span>`;
   // 何日も続く予定は、始まりの日と週の初め（日曜）だけ名前を出し、あとは帯だけにする
   const showName=!o.multi||o.first||!k||new Date(k+"T00:00").getDay()===0;
-  if(o.allDay) return `<span class="chip full${o.multi&&!o.first?" cont-l":""}${o.multi&&!o.last?" cont-r":""}" style="${c}" ${da}>${showName?esc(o.title):"&nbsp;"}</span>`;
+  if(o.allDay) return `<span class="chip full${o.multi&&!o.first?" cont-l":""}${o.multi&&!o.last?" cont-r":""}" style="${c}" ${da}>${showName?(isNoTimeShift(o)?WARN:"")+esc(o.title):"&nbsp;"}</span>`;
   return `<span class="chip" style="${c}" ${da}><span class="tt">${st(o.start)}-${st(o.end)}</span></span>`;
 }
 function calHead(mode){
@@ -491,7 +502,7 @@ function renderTimeline(days){
   const cols=`44px repeat(${days.length},minmax(0,1fr))`;
   const head=`<div class="tl-head" style="grid-template-columns:${cols}"><span></span>${days.map(k=>{const d=new Date(k+"T00:00"),w=d.getDay();return `<button type="button" class="tl-dh${w===0||holiday(k)?" sun":""}${w===6&&!holiday(k)?" sat":""}" data-gotoday="${k}" aria-label="${jdate(k)}の予定を見る"><span>${WD[w]}</span><b class="${k===TODAY?"is-today":""}">${d.getDate()}</b></button>`}).join("")}</div>`;
   const all=days.map(k=>occurrencesOn(k).filter(o=>o.allDay));
-  const adRow=all.some(a=>a.length)?`<div class="tl-all" style="grid-template-columns:${cols}"><span class="tl-lbl">終日</span>${all.map(list=>`<div class="tl-ac">${list.map(o=>`<button type="button" class="chip ${o.type==="task"?"task":"full"}${o.done?" done":""}" style="${cv(colorOf(o))}" data-open="${o.id}" data-occ="${o.occ}">${o.type==="task"?(o.done?"✓":"○"):""}${esc(o.title)}</button>`).join("")}</div>`).join("")}</div>`:"";
+  const adRow=all.some(a=>a.length)?`<div class="tl-all" style="grid-template-columns:${cols}"><span class="tl-lbl">終日</span>${all.map(list=>`<div class="tl-ac">${list.map(o=>`<button type="button" class="chip ${o.type==="task"?"task":"full"}${o.done?" done":""}" style="${cv(colorOf(o))}" data-open="${o.id}" data-occ="${o.occ}">${o.type==="task"?(o.done?"✓":"○"):isNoTimeShift(o)?WARN:""}${esc(o.title)}</button>`).join("")}</div>`).join("")}</div>`:"";
   const hours=Array.from({length:24},(_,h)=>`<span class="tl-h" style="top:${h*HOUR}px">${h?h+":00":""}</span>`).join("");
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const colsHtml=days.map(k=>`<div class="tl-col" data-slot="${k}">${segsFor(k).map(g=>`<button type="button" class="tl-ev${g.o.type==="task"?" task":""}${g.o.done?" done":""}${(g.e-g.s)<50?" short":""}" style="${cv(colorOf(g.o))};top:${g.s/60*HOUR}px;height:${Math.max(20,(g.e-g.s)/60*HOUR-2)}px;left:calc(${g.lane/g.n*100}% + 1px);width:calc(${100/g.n}% - 2px)" data-open="${g.o.id}" data-occ="${g.o.occ}"><b>${g.o.type==="task"?(g.o.done?"✓":"○"):""}${esc(g.o.title)}</b><span>${g.cont?"〜"+st(g.o.end):st(g.o.start)+(g.o.type==="task"?"":"-"+st(g.o.end))}</span></button>`).join("")}${k===TODAY?`<i class="tl-now" style="top:${nowMin/60*HOUR}px"></i>`:""}</div>`).join("");
@@ -512,6 +523,7 @@ function itemHtml(o,opts){
   return `<li class="item${o.done?" done":""}" style="${cv(colorOf(o))}">
     ${o.type==="task"&&!opts.noCheck?`<button type="button" class="check-btn" data-done="${o.id}" data-occ="${o.occ}" aria-pressed="${o.done}" aria-label="${o.done?"終わったのを取り消す":"終わった"}"><span>${o.done?"✓":""}</span></button>`:""}
     <div class="body"><button type="button" class="open" data-open="${o.id}" data-occ="${o.occ}"><span class="t1">${esc(o.title)}</span><span class="t2"><span class="kind">${o.type==="task"?"タスク":"予定"}</span>${when}${timeLabel(o)}・${esc(c.name)}${isRep(o)?`・${repeatLabel(o)}`:""}</span>${o.memo?`<span class="t3">${esc(o.memo)}</span>`:""}</button>
+    ${isNoTimeShift(o)&&!opts.noWarn?`<span class="warn">${WARN} 時間がないので、給料に入りません</span>`:""}
     ${o.place?`<a class="map" href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(o.place)}" target="_blank" rel="noopener">場所：${esc(o.place)}（地図で開く）</a>`:""}</div></li>`;
 }
 function renderSearch(){
@@ -558,6 +570,7 @@ function renderEdit(){
   <input class="title-in" type="text" id="d-title" data-d="title" value="${esc(d.title)}" placeholder="${isTask?"やることを入力":"タイトル（空なら種類の名前）"}" aria-label="タイトル">
   <section class="card">
     <label class="switch-row" for="d-allDay"><span>終日</span><span class="switch"><input type="checkbox" role="switch" id="d-allDay" data-d="allDay" ${d.allDay?"checked":""}><span></span></span></label>
+    ${d.allDay&&!isTask&&catOf(d.cat)&&catOf(d.cat).pay?`<p class="warn">${WARN} 「${esc(catOf(d.cat).name)}」は給料を計算する種類ですが、終日のままだと時間がないので給料に入りません。「終日」をオフにして時間を入れてください。</p>`:""}
     ${d.allDay&&!isTask?`<div class="row"><label for="d-endDate" class="lbl">終わりの日</label><input type="date" id="d-endDate" data-d="endDate" value="${d.endDate||""}" min="${[...d.dates].sort()[0]||""}"></div><p class="hint">旅行など何日も続く予定は、下で始まりの日を1つ選び、ここで終わりの日を選ぶと1つの予定になります。1日だけなら空のままにします。</p>`:""}
     ${d.allDay?"":isTask?`<div class="row"><label for="d-start" class="lbl">時刻</label><input type="time" id="d-start" data-d="start" value="${d.start}"></div>`
       :`<div class="row trow"><input type="time" id="d-start" data-d="start" value="${d.start}" aria-label="開始"> 〜 <input type="time" id="d-end" data-d="end" value="${d.end}" aria-label="終了"></div><p class="hint">終わりが始まりより早いときは、次の日の朝までとして計算します（夜勤など）。</p>`}
@@ -598,6 +611,7 @@ function renderPay(){
   const t=monthTotals();
   return `<div style="display:grid;gap:14px">${monthHead()}
   <section class="card" id="pay-sum">${paySummary(t)}</section>
+  ${noTimeCard()}
   <section class="card"><h3>この月の勤務</h3><div id="pay-list" style="display:grid;gap:10px">${payList(monthShifts())}</div></section>
   <h3>給料の計算方法</h3>
   <p class="note">時給や計算のしかたを自分で決められます。変えるとすぐ上の金額に反映されます。</p>
@@ -607,12 +621,19 @@ function renderPay(){
     <p class="note">所得税をおおまかに引いた金額です（月88,000円未満は0円として計算）。実際の金額は給与明細で確認してください。</p></section>
   <div class="row"><button type="button" class="btn" data-act="addwp">＋ 働く場所を追加</button></div></div>`;
 }
+function noTimeCard(){
+  const list=monthNoTime(); if(!list.length) return "";
+  return `<section class="card warn-card"><h3>${WARN} 給料に入っていない予定（${list.length}件）</h3>
+    <p class="note">給料を計算する種類なのに「終日」で入っていて、時間がないため給料を計算できません。タップして「終日」をオフにし、始まりと終わりの時間を入れると給料に入ります。</p>
+    <ul class="items">${list.map(o=>itemHtml(o,{withDate:true,noCheck:true,noWarn:true})).join("")}</ul></section>`;
+}
 function paySummary(t){
   return `<div class="sum-grid">
     <div class="sum-item"><span class="l">給料の見込み</span><span class="v">${yen(t.pay)}</span></div>
     <div class="sum-item"><span class="l">交通費（給料とは別）</span><span class="v">${yen(t.travel)}</span></div>
     <div class="sum-item total"><span class="l">合計</span><span class="v">${yen(t.pay+t.travel)}</span></div>
     ${state.showTake?`<div class="sum-item"><span class="l">給料の手取り目安</span><span class="v">${yen(t.pay-t.tax)}</span></div>`:""}</div>
+    ${t.noTime?`<p class="warn">${WARN} 時間がないため、給料に入っていない予定が${t.noTime}件あります（下に一覧があります）</p>`:""}
     <div class="row hint">${t.wps.map(w=>{const p=t.per[w.id];return `<span class="row" style="${cv(w.color)};gap:6px"><i class="dot"></i>${esc(w.name)}：${p.days.size}日・給料 ${yen(p.pay)}・交通費 ${yen(p.travel)}</span>`}).join("")}</div>`;
 }
 function payList(shifts){
@@ -699,7 +720,7 @@ function openEdit(date,ev,occ,times){
     endDate:L?addDays(k,L):"",repeat:isRep(ev)?ev.repeat.freq:"",origFreq:isRep(ev)?ev.repeat.freq:"",interval:isRep(ev)?Math.max(1,+ev.repeat.interval||1):1,until:isRep(ev)?(ev.repeat.until||""):"",dates:new Set([k]),my:dd.getFullYear(),mm:dd.getMonth(),text:"",mark:"",textOpen:false};
   if(state.view!=="edit") state.back=state.view; go("edit");
 }
-function leaveEdit(){state.draft=null;go(state.back==="day"||state.back==="search"?state.back:"cal");}
+function leaveEdit(){state.draft=null;go(["day","search","pay"].includes(state.back)?state.back:"cal");}
 function saveDraft(){
   const d=state.draft; if(!d.dates.size){toast("日にちを1つ以上選んでください");return;}
   if(!catOf(d.cat)) d.cat=state.cats[0].id;
@@ -949,14 +970,14 @@ function impCatFor(name){
   return (hit||state.cats.find(c=>!c.pay)||state.cats[0]).id;
 }
 // 名前に種類の名前が入っていれば、その種類にする（例：「バイト（駅前）」→ バイト）
-const impTitleCat=t=>{const hit=state.cats.find(c=>c.name&&c.name.length>=2&&t.includes(c.name));return hit&&hit.id;};
+const impTitleCat=t=>{const T=String(t).trim().toLowerCase();const hit=state.cats.filter(c=>{const n=(c.name||"").trim().toLowerCase();return n&&(n===T||(n.length>=2&&T.includes(n)));}).sort((a,b)=>b.name.length-a.name.length)[0];return hit&&hit.id;};
 function impBuild(){
   const im=state.imp, have=new Map(), groups=new Map(), was={};
   state.events.forEach(e=>{if(e.ics) have.set(e.ics,e);});
   const list=im.cals.map(c=>{const evs=[], dups=[];
-    icsToEvents(c,im.range).forEach(e=>{const o=have.get(e.ics); if(o&&!was[e.title]) was[e.title]=o.cat; (o?dups:evs).push(e); const g=groups.get(e.title)||{n:0,cal:c}; g.n++; groups.set(e.title,g);});
+    icsToEvents(c,im.range).forEach(e=>{const o=have.get(e.ics); if(o&&!was[e.title]) was[e.title]=o.cat; (o?dups:evs).push(e); const g=groups.get(e.title)||{n:0,ad:0,cal:c}; g.n++; if(e.allDay) g.ad++; groups.set(e.title,g);});
     return {c,evs,dups};});
-  const titles=[...groups].sort((a,b)=>b[1].n-a[1].n||a[0].localeCompare(b[0],"ja")).map(([t,g])=>({t,n:g.n,cat:(im.titles||{})[t]||(catOf(was[t])&&was[t])||impTitleCat(t)||g.cal.cat}));
+  const titles=[...groups].sort((a,b)=>b[1].n-a[1].n||a[0].localeCompare(b[0],"ja")).map(([t,g])=>({t,n:g.n,ad:g.ad,cat:(im.titles||{})[t]||(catOf(was[t])&&was[t])||impTitleCat(t)||g.cal.cat}));
   return {list,titles,catOfTitle:Object.fromEntries(titles.map(x=>[x.t,x.cat])),have,dup:list.reduce((s,x)=>s+x.dups.length,0),total:list.reduce((s,x)=>s+x.evs.length,0)};
 }
 function renderImport(){
@@ -972,7 +993,7 @@ function renderImport(){
       return `<div class="imp-row"><span>「${esc(nm)}」の${x.evs.length+x.dups.length}件${ex?`（例：${esc(ex)}）`:""}は、ふだんはこの種類（色）にする</span><div class="row isel">${dot(x.c.cat)}<select data-impcat="${i}" aria-label="${esc(nm)}の予定の種類">${opts(x.c.cat)}</select></div></div>`;}).join("")}
     <details class="imp-titles" ${im.titlesOpen?"open":""}><summary>予定の名前ごとに種類（色）を分ける（${r.titles.length}通りの名前）</summary>
       <p class="note">Googleカレンダーの書き出しファイルには、予定の色が入っていません。そのかわり、ここで予定の名前ごとに種類（色）を選べます。同じ名前の予定は、まとめてその色になります。</p>
-      <ul class="tlist">${r.titles.map((x,i)=>`<li><div class="tname-row"><span class="tname">${esc(x.t)}</span><span class="tcount">${x.n}件</span></div><div class="row isel">${dot(x.cat)}<select data-imptitle="${i}" aria-label="「${esc(x.t)}」の種類">${opts(x.cat)}</select></div></li>`).join("")}</ul>
+      <ul class="tlist">${r.titles.map((x,i)=>`<li><div class="tname-row"><span class="tname">${esc(x.t)}</span><span class="tcount">${x.n}件</span></div><div class="row isel">${dot(x.cat)}<select data-imptitle="${i}" aria-label="「${esc(x.t)}」の種類">${opts(x.cat)}</select></div>${x.ad&&catOf(x.cat)&&catOf(x.cat).pay?`<span class="warn">${WARN} このうち${x.ad}件は終日なので、時間を入れるまで給料に入りません</span>`:""}</li>`).join("")}</ul>
     </details>
     ${r.dup?`<label class="check"><input type="checkbox" id="imp-recolor" ${recolor?"checked":""}>すでに移した${r.dup}件の種類（色）も、ここで選んだものに直す</label>`:""}
     <div class="imp-row"><label for="imp-range" class="lbl">いつからの予定を移すか</label><select id="imp-range">${[["1y","1年前から"],["now","今日から"],["all","すべて"]].map(([v,l])=>`<option value="${v}" ${im.range===v?"selected":""}>${l}</option>`).join("")}</select></div>
@@ -1080,7 +1101,7 @@ document.addEventListener("change",async ev=>{
   const t=ev.target;
   if(t.id==="imp-range"&&state.imp){state.imp.range=t.value;rerenderKeep();return;}
   if(t.dataset.impcat!==undefined&&state.imp){state.imp.cals[+t.dataset.impcat].cat=t.value;rerenderKeep();return;}
-  if(t.dataset.imptitle!==undefined&&state.imp){state.imp.titles[state.imp.tlist[+t.dataset.imptitle]]=t.value;const d=t.previousElementSibling;if(d) d.style.cssText=cv((catOf(t.value)||{color:GRAY}).color);return;}
+  if(t.dataset.imptitle!==undefined&&state.imp){state.imp.titles[state.imp.tlist[+t.dataset.imptitle]]=t.value;rerenderKeep();return;}
   if(t.id==="imp-recolor"&&state.imp){state.imp.recolor=t.checked;rerenderKeep();return;}
   if(t.id!=="ics-file"||!t.files.length) return;
   const files=[...t.files]; t.value="";
