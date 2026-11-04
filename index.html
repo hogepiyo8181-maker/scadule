@@ -106,6 +106,7 @@ button{cursor:pointer}
   .cal{margin-inline:-16px;border-radius:0;border-left:0;border-right:0}
   .day{min-height:88px;padding:3px 1px}
   .chip{font-size:.72rem;padding:0 2px;letter-spacing:-.03em}
+  .grid .chip{text-overflow:clip}
 }
 .trow{flex-wrap:nowrap}
 .trow input{flex:1;min-width:0}
@@ -458,7 +459,8 @@ function chip(o,k){
   // 何日も続く予定は、始まりの日と週の初め（日曜）だけ名前を出し、あとは帯だけにする
   const showName=!o.multi||o.first||!k||new Date(k+"T00:00").getDay()===0;
   if(o.allDay) return `<span class="chip full${o.multi&&!o.first?" cont-l":""}${o.multi&&!o.last?" cont-r":""}" style="${c}" ${da}>${showName?(isNoTimeShift(o)?WARN:"")+esc(o.title):"&nbsp;"}</span>`;
-  return `<span class="chip" style="${c}" ${da}><span class="tt">${st(o.start)}-${st(o.end)}</span></span>`;
+  // 月のカレンダーでは時間ではなく名前を出す（時間は日付をタップした画面で見られる）
+  return `<span class="chip" style="${c}" ${da} title="${st(o.start)}-${st(o.end)} ${esc(o.title)}">${esc(o.title)||"（名前なし）"}</span>`;
 }
 function calHead(mode){
   const k=state.sel, ws=addDays(k,-new Date(k+"T00:00").getDay());
