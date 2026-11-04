@@ -1,0 +1,16 @@
+{
+  "name": "家計簿",
+  "short_name": "家計簿",
+  "description": "手入力とレシートで記録できる、色分けの家計簿",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F6F3EF",
+  "theme_color": "#9A4A14",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml"}
+  ]
+}
