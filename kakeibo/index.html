@@ -135,6 +135,8 @@ textarea{min-height:80px}
 .field{display:grid;gap:6px;min-width:0}
 .card>*{min-width:0}
 .amt input{width:100%}
+.amt.sm input{font-size:1.5rem}
+.amt.sm span{font-size:1.2rem}
 .actions{display:flex;gap:10px;flex-wrap:wrap}
 .actions .btn.primary{flex:1}
 
@@ -273,14 +275,19 @@ textarea{min-height:80px}
         <button data-rm="simple" aria-pressed="true">合計だけ記録</button>
         <button data-rm="items" aria-pressed="false">品目ごとに分ける</button>
       </div>
-      <div class="card">
+      <div class="card" id="rSimple">
+        <div class="field"><label class="lbl" for="sTotal">合計（払った金額）</label>
+          <label class="amt"><span>¥</span><input id="sTotal" inputmode="numeric" placeholder="0" aria-label="合計"></label></div>
+        <div class="field"><label class="lbl" for="sSub">小計（なくても大丈夫です）</label>
+          <label class="amt sm"><span>¥</span><input id="sSub" inputmode="numeric" placeholder="0" aria-label="小計"></label></div>
+        <div class="field"><label class="lbl" for="sDate">日付</label><input type="date" id="sDate"></div>
+        <div class="field"><span class="lbl">分類</span><div class="cats" id="rCats"></div></div>
+        <p class="hint">読み間違いがあれば、数字をタップして直してください。</p>
+      </div>
+      <div class="card" id="rInfo">
         <div class="field"><label class="lbl" for="rStore">お店</label><input type="text" id="rStore" autocomplete="off"></div>
         <div class="field"><label class="lbl" for="rDate">日付</label><input type="date" id="rDate"></div>
         <div class="field" id="rPayField"><span class="lbl">支払い方法</span><div class="chips" id="rPay"></div></div>
-      </div>
-      <div class="card" id="rSimple">
-        <span class="lbl">分類</span>
-        <div class="cats" id="rCats"></div>
       </div>
       <div class="card" id="rItemsCard">
         <h3>品目と分類</h3>
@@ -288,7 +295,7 @@ textarea{min-height:80px}
         <div class="ritems" id="rItems"></div>
         <button class="btn" id="rAddItem">＋ 品目を足す</button>
       </div>
-      <div class="card">
+      <div class="card" id="rTotalCard">
         <div class="field"><label class="lbl" for="rTotal">レシートの合計（税込）</label>
           <label class="amt"><span>¥</span><input id="rTotal" inputmode="numeric" placeholder="0" aria-label="レシートの合計"></label></div>
         <div class="rsum" id="rSum"></div>
@@ -469,7 +476,7 @@ function renderMonth(){
     const o=es.filter(e=>e.type==="out").reduce((a,e)=>a+e.amount,0);
     return `<div><div class="dayh"><span>${dt.getMonth()+1}月${dt.getDate()}日（${WD[dt.getDay()]}）</span><span class="num">${o?yen(o):""}</span></div>
     <ul class="items">${es.map(e=>{const c=catFor(e);
-      const sub=[e.store&&c.name,e.pay,e.memo].filter(Boolean).join("・");
+      const sub=[e.store&&c.name,e.subtotal&&"小計 "+yen(e.subtotal),e.pay,e.memo].filter(Boolean).join("・");
       return `<li class="item ${e.type}" style="--cc:${c.color}"><button data-id="${esc(e.id)}"><span class="t1">${esc(e.store||c.name)}</span><span class="t2">${esc(sub)}</span><span class="am">${e.type==="in"?"+":""}${yen(e.amount)}</span></button></li>`;
     }).join("")}</ul></div>`;
   }).join("");
@@ -680,10 +687,11 @@ async function readAI(file){
   $("rBusyTxt").textContent="AIが読み取っています…（10〜20秒ほど）";
   const dataUrl=await prepImage(file,1600,false);
   const names=outCats().map(c=>c.name);
-  const schema={type:"object",additionalProperties:false,required:["is_receipt","store","date","total","items"],properties:{
+  const schema={type:"object",additionalProperties:false,required:["is_receipt","store","date","subtotal","total","items"],properties:{
     is_receipt:{type:"boolean"},
     store:{type:"string"},
     date:{type:"string"},
+    subtotal:{type:"integer"},
     total:{type:"integer"},
     items:{type:"array",items:{type:"object",additionalProperties:false,required:["name","price","category"],properties:{
       name:{type:"string"},price:{type:"integer"},category:{type:"string",enum:names}}}}
@@ -692,6 +700,7 @@ async function readAI(file){
 - is_receipt: レシートや領収書の写真なら true。違う写真なら false にして、ほかは空にする。
 - store: お店の名前（支店名は省いてよい）。
 - date: 買った日付を YYYY-MM-DD で。和暦は西暦に直す。読めなければ空文字。
+- subtotal: 小計の金額。なければ 0。
 - total: 実際に支払った合計金額（税込）。円の整数。
 - items: 買った品物ごとに、name（品名。読みやすく直してよい）、price（その品の金額。数量があれば数量分。値引き・割引の行は直前の品物の金額から引いて、別の品物にしない）、category（次の分類から一番合うもの: ${names.join("、")}）。
 小計・消費税・合計・お預かり・お釣り・ポイントの行は items に入れない。`;
@@ -718,7 +727,7 @@ async function readAI(file){
   let d; try{d=JSON.parse(txt.text);}catch(e){throw fail("読み取った結果がうまく受け取れませんでした。もう一度ためしてください。");}
   if(!d.is_receipt) throw fail("レシートが見つかりませんでした。レシート全体が写るように撮ってください。");
   const byName=Object.fromEntries(outCats().map(c=>[c.name,c.id]));
-  return {byAI:true,store:d.store,date:/^\d{4}-\d{2}-\d{2}$/.test(d.date)?d.date:"",total:d.total,
+  return {byAI:true,subtotal:d.subtotal||0,store:d.store,date:/^\d{4}-\d{2}-\d{2}$/.test(d.date)?d.date:"",total:d.total,
     items:d.items.filter(i=>i.name||i.price).map(i=>({name:i.name,price:i.price,cat:guessLearned(i.name)||byName[i.category]||fallbackCat()}))};
 }
 const guessLearned=name=>{const id=state.learn[normName(name)]; return id&&catOf(id)?id:null;};
@@ -733,32 +742,42 @@ function loadTess(){
 async function readFree(file){
   $("rBusyTxt").textContent="読み取りの準備をしています…（初回は少し時間がかかります）";
   await loadTess();
-  const dataUrl=await prepImage(file,2000,true);
+  const dataUrl=await prepImage(file,3000,true);
   const worker=await Tesseract.createWorker("jpn",1,{logger:m=>{
     if(m.status==="recognizing text") $("rBusyTxt").textContent="読み取っています… "+Math.round(m.progress*100)+"%";}});
   try{
+    await worker.setParameters({tessedit_pageseg_mode:"4"}); // receipts are one column of lines
     const {data}=await worker.recognize(dataUrl);
     return parseReceiptText(data.text);
   }finally{worker.terminate();}
 }
 // Turn raw OCR text into store / date / total / items. OCR text is messy, so this is a best effort the user then fixes.
+function fixDigits(l){ // OCR often reads 0 as O, 1 as l or |, 5 as S inside numbers
+  return l.replace(/[\dOoDIl|SB,]*\d[\dOoDIl|SB,]*/g,t=>t.replace(/[OoD]/g,"0").replace(/[Il|]/g,"1").replace(/S/g,"5").replace(/B/g,"8"));
+}
+function validDate(y,m,d){y=+y;m=+m;d=+d; if(m<1||m>12||d<1||d>31||y<2015||y>2045) return ""; return y+"-"+pad(m)+"-"+pad(d);}
 function parseReceiptText(raw){
-  const lines=raw.split(/\n/).map(l=>l
+  const lines=raw.split(/\n/).map(l=>fixDigits(l
     .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
     .replace(/[￥\\]/g,"¥").replace(/[，、]/g,",").replace(/[．]/g,".").replace(/[－−―‐](?=\s*[¥\d])/g,"-")
     .replace(/(?<=[^\x00-\x7F])\s+(?=[^\x00-\x7F])/g,"")  // OCR puts spaces between Japanese letters
-    .trim()).filter(Boolean);
-  let date="", total=0, store="";
+    .trim()).replace(/(\d)[.:](\d{3})(?!\d)/g,"$1,$2")).filter(Boolean); // "2.200" is 2,200 on a receipt
+  let date="", total=0, subtotal=0, tax=0, store="";
   for(const l of lines){
-    const m=l.match(/(20\d{2})\s*[年\/.\-]\s*(\d{1,2})\s*[月\/.\-]\s*(\d{1,2})/);
-    if(m){date=m[1]+"-"+pad(+m[2])+"-"+pad(+m[3]); break;}
-    const r=l.match(/(?:令和|R)\s*(\d{1,2})\s*[年\/.\-]\s*(\d{1,2})\s*[月\/.\-]\s*(\d{1,2})/);
-    if(r){date=(2018+ +r[1])+"-"+pad(+r[2])+"-"+pad(+r[3]); break;}
+    let m=l.match(/(20\d{2})\s*\D{1,3}\s*(\d{1,2})\s*\D{1,3}\s*(\d{1,2})/); if(m&&(date=validDate(m[1],m[2],m[3]))) break;
+    m=l.match(/(?:令和|R)\s*(\d{1,2})\s*\D{1,2}\s*(\d{1,2})\s*\D{1,2}\s*(\d{1,2})/); if(m&&(date=validDate(2018+ +m[1],m[2],m[3]))) break;
+    m=l.match(/(?:^|\D)(\d{2})[\/.](\d{1,2})[\/.](\d{1,2})(?:\D|$)/); if(m&&(date=validDate(2000+ +m[1],m[2],m[3]))) break;
   }
   const priceRe=/(-?)\s*¥?\s*(\d{1,3}(?:,\d{3})+|\d{2,6})\s*(?:円|外|内|※|\*|軽|[A-Za-z])?$/;
-  for(const l of lines){
-    if(/合計|お買上|お買い上|ご請求/.test(l)&&!/小計|対象|点数|税.*合計/.test(l)){const m=l.match(priceRe); if(m){total=toNum(m[2]); break;}}
-  }
+  // the amount on a labeled line, or on the next line when OCR splits label and number
+  const amountAt=i=>{let m=lines[i].match(priceRe); if(m) return toNum(m[2]); if(lines[i+1]&&!/[ぁ-んァ-ヶ一-龠]/.test(lines[i+1])){m=lines[i+1].match(priceRe); if(m) return toNum(m[2]);} return 0;};
+  lines.forEach((l,i)=>{
+    if(!subtotal&&/小計|小言十/.test(l)) subtotal=amountAt(i);
+    else if(!total&&/合計|合言十|お買上|お買い上|ご請求|税込計|お会計/.test(l)&&!/小計|対象|点数|税.*合計.*対象/.test(l)) total=amountAt(i);
+    else if(!tax&&/外税|消費税|税額/.test(l)&&!/対象|内税/.test(l)) tax=amountAt(i);
+  });
+  if(!total&&subtotal) total=subtotal+tax;
+  if(subtotal&&total&&(subtotal>total*1.5||subtotal<total*0.5)) subtotal=0; // clearly misread
   store=(lines.find(l=>/[ぁ-んァ-ヶ一-龠A-Za-z]{2,}/.test(l)&&!/(TEL|電話|領収|レシート|\d{3,}-)/i.test(l))||"").replace(/[^\wぁ-んァ-ヶー一-龠・&\s]/g,"").trim().slice(0,30);
   const skip=/(20\d{2}|令和|R\d)\s*[年\/.\-]|\d{1,2}\s*:\s*\d{2}|合計|小計|税|お預|預り|釣|現金|クレジット|カード|点数|買上|TEL|電話|No\.|レジ|担当|対象|残高|ポイント|領収|支払|電子マネー|QR/i;
   const items=[];
@@ -772,11 +791,11 @@ function parseReceiptText(raw){
     items.push({name,price,cat:guessCat(name)||fallbackCat()});
   }
   if(!items.length&&!total) throw fail("文字をうまく読み取れませんでした。明るい場所でまっすぐ撮り直すか、手で入れてください。");
-  return {store,date,total,items};
+  return {store,date,total,subtotal,items};
 }
 
 function showResult(d){
-  rec={store:d.store||"",date:d.date||defaultDate(),total:d.total||0,items:d.items.map(i=>({...i})),pay:"",
+  rec={store:d.store||"",date:d.date||defaultDate(),total:d.total||0,subtotal:d.subtotal||0,items:d.items.map(i=>({...i})),pay:"",
     mode:d.mode||(d.items.length>1&&d.byAI?"items":"simple"),cat:null};
   rec.cat=storeCat(rec.store)||mainCat(rec.items)||fallbackCat();
   $("rStep1").hidden=true; $("rWork").hidden=!lastFile; $("rBusy").hidden=true; $("rErr").hidden=true; $("rErrBtns").hidden=true;
@@ -793,7 +812,10 @@ function mainCat(items){const g=new Map(); for(const i of items) if(i.price>0) g
 function renderRec(){
   document.querySelectorAll("[data-rm]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.rm===rec.mode));
   const simple=rec.mode==="simple";
-  $("rSimple").hidden=!simple; $("rItemsCard").hidden=simple; $("rSum").hidden=simple; $("rGroups").hidden=simple;
+  $("rSimple").hidden=!simple; $("rInfo").hidden=simple; $("rItemsCard").hidden=simple; $("rTotalCard").hidden=simple;
+  const fmt=n=>n?n.toLocaleString("ja-JP"):"";
+  $("sTotal").value=fmt(rec.total); $("sSub").value=fmt(rec.subtotal); $("sDate").value=rec.date;
+  $("rTotal").value=fmt(rec.total); $("rDate").value=rec.date;
   $("rCats").innerHTML=outCats().map(c=>`<button data-c="${esc(c.id)}" aria-pressed="${rec.cat===c.id}" style="--cc:${c.color}"><span class="dot"></span>${esc(c.name)}</button>`).join("");
   $("rSave").textContent=simple?"記録する":"まとめて記録する";
   $("rPayField").hidden=!state.pay.length;
@@ -842,18 +864,23 @@ $("rItems").addEventListener("click",e=>{const b=e.target.closest("[data-del]");
 $("rAddItem").onclick=()=>{rec.items.push({name:"",price:0,cat:fallbackCat()}); renderRec(); const ins=$("rItems").querySelectorAll("input[data-f=name]"); ins[ins.length-1].focus();};
 $("rPay").onclick=e=>{const b=e.target.closest("[data-p]"); if(!b) return; rec.pay=rec.pay===b.dataset.p?"":b.dataset.p; renderRec();};
 $("rTotal").addEventListener("input",()=>{fmtAmtInput($("rTotal")); rec.total=toNum($("rTotal").value); renderRecSum();});
+$("sTotal").addEventListener("input",()=>{fmtAmtInput($("sTotal")); rec.total=toNum($("sTotal").value);});
+$("sSub").addEventListener("input",()=>{fmtAmtInput($("sSub")); rec.subtotal=toNum($("sSub").value);});
+$("sDate").addEventListener("change",()=>{rec.date=$("sDate").value;});
+$("rDate").addEventListener("change",()=>{rec.date=$("rDate").value;});
 document.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{
   rec.mode=b.dataset.rm;
   if(rec.mode==="items"&&!rec.items.some(i=>i.price)) rec.items=[{name:"",price:rec.total||0,cat:rec.cat}];
   renderRec();});
 $("rCats").onclick=e=>{const b=e.target.closest("[data-c]"); if(!b) return; rec.cat=b.dataset.c; renderRec();};
 $("rSave").onclick=()=>{
-  rec.store=$("rStore").value.trim(); rec.date=$("rDate").value;
+  rec.store=$("rStore").value.trim();
   if(!rec.date){toast("日付を入れてください");return;}
   if(rec.mode==="simple"){
     const amount=rec.total||rec.items.reduce((a,i)=>a+(i.price||0),0);
     if(!amount){toast("合計の金額を入れてください");$("rTotal").focus();return;}
-    const e={id:uid(),type:"out",amount,cat:rec.cat,date:rec.date,store:rec.store,pay:rec.pay,memo:"",created:Date.now()};
+    const e={id:uid(),type:"out",amount,cat:rec.cat,date:rec.date,store:"",pay:"",memo:"",created:Date.now()};
+    if(rec.subtotal) e.subtotal=rec.subtotal;
     state.entries.push(e);
     if(rec.store){state.learnStore=state.learnStore||{}; state.learnStore[normName(rec.store)]=rec.cat;}
     save(); jumpTo(rec.date); filterCat=null; renderMonth(); show("scrMonth");
