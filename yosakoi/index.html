@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>よさこい審査</title>
+<meta name="description" content="紙の審査用紙を打ち込んで、照合・減点・順位までまとめるよさこい審査の集計アプリ">
+<meta name="theme-color" content="#B5352A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="よさこい審査">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* 画面は5つ: 入力 / 減点 / 照合 / 結果 / 設定。紙の審査用紙と同じ順で打ち込めることを一番にしています。 */
+:root{
+  --bg:#F7F3EE; --surface:#FFFFFF; --ink:#26201B; --muted:#675D55; --line:#E3DAD1;
+  --accent:#B5352A; --accent-ink:#FFFFFF; --accent-soft:#F7E1DC;
+  --ok:#1B7A45; --ok-soft:#DDF1E4; --warn:#9A5600; --warn-soft:#FBEBD3; --danger:#B3261E;
+  --gold:#B88A00; --silver:#7D8590; --bronze:#A0602F;
+  --f-display:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic","Meiryo",sans-serif;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#17130F; --surface:#221C17; --ink:#F0E9E2; --muted:#AEA196; --line:#3D342C;
+  --accent:#F08A7C; --accent-ink:#2A0C08; --accent-soft:#45221D;
+  --ok:#74D59E; --ok-soft:#1D3627; --warn:#F2C078; --warn-soft:#3C2C14; --danger:#F2B8B5;
+  --gold:#E8C14A; --silver:#B9C0C8; --bronze:#D99A66;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#17130F; --surface:#221C17; --ink:#F0E9E2; --muted:#AEA196; --line:#3D342C;
+  --accent:#F08A7C; --accent-ink:#2A0C08; --accent-soft:#45221D;
+  --ok:#74D59E; --ok-soft:#1D3627; --warn:#F2C078; --warn-soft:#3C2C14; --danger:#F2B8B5;
+  --gold:#E8C14A; --silver:#B9C0C8; --bronze:#D99A66;
+  color-scheme:dark;
+}
+html{-webkit-text-size-adjust:100%}
+:root{padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:1rem;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-top:12px;
+  padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:820px;margin:0 auto;display:grid;gap:14px}
+h1,h2,h3{font-family:var(--f-display);margin:0;line-height:1.3;text-wrap:balance}
+h1{font-size:1.3rem}
+h2{font-size:1.15rem}
+h3{font-size:1rem}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px}
+.top .ev{font-size:.85rem;color:var(--muted);font-weight:700;overflow-wrap:anywhere}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;min-width:0}
+.hint{font-size:.88rem;color:var(--muted);margin:0}
+.lbl{font-size:.9rem;font-weight:700}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 16px;font-weight:700;min-height:44px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--danger);border-color:var(--danger);background:none}
+.btn.wide{width:100%}
+.small{white-space:nowrap;border:1px solid var(--line);background:none;border-radius:8px;padding:4px 10px;font-size:.88rem;color:var(--muted);min-height:36px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;min-height:40px;font-weight:700}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:8px 6px;min-height:44px;font-weight:700;border-left:1px solid var(--line)}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+input[type=text],input[type=number],select,textarea{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;min-height:44px;width:100%;min-width:0}
+textarea{min-height:140px;line-height:1.5}
+.banner{border-radius:var(--r);padding:12px 14px;font-weight:700;display:flex;gap:10px;align-items:flex-start}
+.banner.ok{background:var(--ok-soft);color:var(--ok)}
+.banner.warn{background:var(--warn-soft);color:var(--warn)}
+.banner span{font-weight:500;display:block;font-size:.9rem;color:var(--ink)}
+.empty{text-align:center;padding:28px 16px}
+
+/* 下のタブ */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
+  display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs button{border:0;background:none;padding:8px 2px 10px;min-height:60px;display:grid;justify-items:center;gap:2px;font-size:.78rem;font-weight:700;color:var(--muted)}
+.tabs svg{width:24px;height:24px}
+.tabs button[aria-current="page"]{color:var(--accent)}
+.tabs .badge{position:relative}
+.tabs .badge[data-n]::after{content:attr(data-n);position:absolute;top:-6px;right:-14px;background:var(--warn);color:var(--surface);font-size:.65rem;border-radius:999px;padding:0 5px;line-height:1.5}
+
+/* 入力: どの紙を打っているか */
+.grid-prog{overflow-x:auto}
+.grid-prog table{border-collapse:collapse;font-size:.9rem;min-width:100%}
+.grid-prog th,.grid-prog td{border:1px solid var(--line);padding:0;text-align:center}
+.grid-prog th{padding:4px 8px;font-weight:700;background:var(--bg);white-space:nowrap}
+.grid-prog th.jn{text-align:left;max-width:9em;overflow:hidden;text-overflow:ellipsis}
+.grid-prog td button{width:100%;min-height:40px;border:0;background:none;font-weight:700;font-variant-numeric:tabular-nums;color:var(--muted)}
+.grid-prog td.done button{background:var(--ok-soft);color:var(--ok)}
+.grid-prog td.part button{background:var(--warn-soft);color:var(--warn)}
+.grid-prog td.cur button{outline:3px solid var(--accent);outline-offset:-3px}
+.sheet-head{display:grid;gap:4px}
+.sheet-head b{font-family:var(--f-display);font-size:1.15rem}
+
+/* 入力: チームごとの採点（紙と同じ並び） */
+.team{display:grid;gap:10px}
+.team-h{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.team-h h3{font-size:1.08rem;overflow-wrap:anywhere}
+.team-h .theme{font-size:.88rem;color:var(--muted)}
+.sub{font-family:var(--f-display);font-size:1.25rem;font-weight:700;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.sub small{display:block;font-size:.75rem;color:var(--muted);font-family:var(--f-body)}
+.sub.done{color:var(--ok)}
+.item{display:grid;gap:6px;padding-top:10px;border-top:1px dashed var(--line)}
+.item-h{display:flex;justify-content:space-between;gap:8px;font-weight:700;font-size:.95rem}
+.item-h .mul{color:var(--accent)}
+.item-h .pts{color:var(--muted);font-variant-numeric:tabular-nums;font-weight:500}
+.scores{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+@media (min-width:600px){.scores.n10{grid-template-columns:repeat(10,1fr)}}
+.scores button{min-height:46px;border:1px solid var(--line);background:var(--bg);border-radius:10px;font-weight:700;font-size:1.1rem;font-variant-numeric:tabular-nums}
+.scores button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.scores.miss button{border-color:var(--warn)}
+.nav-sheet{display:flex;gap:8px;justify-content:space-between}
+.nav-sheet .btn{flex:1}
+
+/* 減点 */
+.ded-team{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line)}
+.ded-team:first-child{border-top:0}
+.ded-list{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.tag{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);border-radius:999px;padding:2px 4px 2px 10px;font-size:.88rem;font-weight:700}
+.tag button{border:0;background:none;width:30px;height:30px;border-radius:50%;font-size:1rem}
+
+/* 照合 */
+.counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.counts div{background:var(--bg);border-radius:10px;padding:8px 10px;display:grid}
+.counts b{font-family:var(--f-display);font-size:1.4rem;font-variant-numeric:tabular-nums}
+.counts small{font-size:.8rem;color:var(--muted);font-weight:700}
+.counts .bad b{color:var(--warn)}
+.counts .good b{color:var(--ok)}
+.mm{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:12px 0;border-top:1px solid var(--line)}
+.mm:first-of-type{border-top:0}
+.mm-h{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.mm-h b{overflow-wrap:anywhere}
+.mm-h .why{color:var(--warn);font-weight:700;font-size:.9rem}
+.cmp{overflow-x:auto}
+.cmp table{border-collapse:collapse;font-size:.9rem;width:100%}
+.cmp th,.cmp td{border:1px solid var(--line);padding:4px 6px;text-align:center;font-variant-numeric:tabular-nums}
+.cmp th{background:var(--bg);font-weight:700;white-space:nowrap}
+.cmp td.diff{background:var(--warn-soft);color:var(--warn);font-weight:700}
+.cmp th.who{text-align:left}
+
+/* 結果 */
+.podium{display:grid;gap:8px}
+.pod{display:flex;align-items:center;gap:12px;padding:12px;border-radius:var(--r);background:var(--bg)}
+.medal{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:1.1rem;color:#fff;flex:none}
+.m1{background:var(--gold)} .m2{background:var(--silver)} .m3{background:var(--bronze)}
+.pod .nm{flex:1;min-width:0;font-weight:700;font-size:1.05rem;overflow-wrap:anywhere}
+.pod .tot{font-family:var(--f-display);font-size:1.4rem;font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+.pod .tot small{display:block;font-size:.75rem;color:var(--muted);font-family:var(--f-body)}
+.rank-list{display:grid;grid-template-columns:minmax(0,1fr)}
+.rk{border-top:1px solid var(--line);min-width:0}
+.rk:first-child{border-top:0}
+.rk>button{width:100%;border:0;background:none;text-align:left;display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:10px 0}
+.rk .no{font-family:var(--f-display);font-weight:700;font-size:1.2rem;text-align:center;font-variant-numeric:tabular-nums}
+.rk .nm{font-weight:700;overflow-wrap:anywhere}
+.rk .meta{display:block;font-size:.82rem;color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
+.rk .tot{font-family:var(--f-display);font-size:1.3rem;font-weight:700;font-variant-numeric:tabular-nums}
+.rk .tie{color:var(--warn)}
+.rk .detail{padding:0 0 12px}
+
+/* 設定 */
+.list{display:grid;gap:8px}
+.li{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
+.li .mv{display:grid;gap:2px}
+.li .mv button{width:34px;height:24px;border:1px solid var(--line);background:none;border-radius:6px;font-size:.7rem;line-height:1}
+.li .x{width:40px;height:40px;border:1px solid var(--line);background:none;border-radius:8px;color:var(--danger);font-size:1.05rem}
+.fields{display:grid;gap:6px;grid-template-columns:1fr}
+.fields.item{grid-template-columns:minmax(0,1fr) 72px 72px auto}
+.fields.team{grid-template-columns:64px minmax(0,1fr)}
+.fields.team .theme{grid-column:1 / -1}
+.fields.rule{grid-template-columns:minmax(0,1fr) 96px}
+.fields label{display:grid;gap:2px;font-size:.75rem;color:var(--muted);font-weight:700}
+.tiebox{display:flex;align-items:center;gap:4px;font-size:.8rem;font-weight:700;white-space:nowrap;min-height:44px}
+.tiebox input{width:22px;height:22px}
+@media (max-width:420px){.fields.item{grid-template-columns:minmax(0,1fr) 64px 64px}.fields.item .tiebox{grid-column:1 / -1;min-height:28px}}
+details.card>summary{cursor:pointer;font-family:var(--f-display);font-weight:700;font-size:1.1rem;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary::after{content:"＋";color:var(--muted)}
+details.card[open]>summary::after{content:"－"}
+details.card>summary small{font-family:var(--f-body);font-size:.85rem;color:var(--muted);font-weight:500;margin-left:auto}
+
+/* 発表 */
+.show{position:fixed;inset:0;z-index:50;background:#140E0B;color:#FFF7EE;display:grid;grid-template-rows:auto 1fr auto;padding:calc(16px + env(safe-area-inset-top,0px)) 20px calc(16px + env(safe-area-inset-bottom,0px))}
+.show .x{justify-self:end;border:1px solid #5a4a40;background:none;color:inherit;border-radius:10px;padding:8px 14px;min-height:44px}
+.show .stage{display:grid;place-content:center;text-align:center;gap:14px}
+.show .place{font-family:var(--f-display);font-size:clamp(2rem,9vw,4rem);font-weight:700}
+.show .p1{color:#F3CB4C} .show .p2{color:#D5DCE4} .show .p3{color:#E0A070}
+.show .team{font-family:var(--f-display);font-size:clamp(1.6rem,7vw,3.2rem);font-weight:700;overflow-wrap:anywhere}
+.show .pt{font-size:clamp(1.1rem,4.5vw,1.8rem);font-variant-numeric:tabular-nums;color:#E8D9CB}
+.show .tap{text-align:center;color:#BBA898;font-size:.95rem}
+.show .next{min-height:56px;border-radius:12px;border:0;background:#B5352A;color:#fff;font-weight:700;font-size:1.1rem;width:min(420px,100%);justify-self:center}
+
+.toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:700;z-index:40;width:max-content;max-width:min(560px,calc(100% - 32px));display:flex;gap:12px;align-items:center}
+.toast button{flex:none;white-space:nowrap;border:0;background:none;color:inherit;text-decoration:underline;font-weight:700;min-height:36px}
+
+/* 印刷する審査用紙 */
+#print{display:none}
+@media print{
+  @page{size:A4 portrait;margin:12mm}
+  body{background:#fff;color:#000;padding:0;font-size:11pt}
+  body::before,.wrap,.tabs,.toast,.show{display:none!important}
+  #print{display:block}
+  .pg{page-break-after:always;break-after:page}
+  .pg:last-child{page-break-after:auto;break-after:auto}
+  .pg h1{font-size:14pt;margin:0 0 2mm;font-family:var(--f-body)}
+  .pg p{margin:0 0 3mm;font-size:10pt}
+  .pg table{border-collapse:collapse;width:100%;table-layout:fixed}
+  .pg th,.pg td{border:1px solid #000;padding:1.6mm 1mm;text-align:center;font-size:10.5pt}
+  .pg th{background:#eee}
+  .pg td.nm{text-align:left;vertical-align:top;font-weight:700;padding:2mm}
+  .pg td.nm span{display:block;font-weight:400;font-size:9.5pt;margin-top:1mm}
+  .pg td.it{text-align:left;white-space:nowrap;font-size:9.5pt}
+  .pg tr.first td{border-top:2px solid #000}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 id="screenTitle">入力</h1>
+    <span class="ev" id="evName"></span>
+  </header>
+  <main id="main"></main>
+</div>
+
+<nav class="tabs" aria-label="画面の切り替え">
+  <button data-tab="input"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>入力</button>
+  <button data-tab="ded"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>減点</button>
+  <button data-tab="check"><span class="badge" id="checkBadge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11M3.5 18l1.5 1.5L7.5 17"/></svg></span>照合</button>
+  <button data-tab="result"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18"/><rect x="9" y="7" width="6" height="13"/><rect x="3" y="12" width="6" height="8"/><rect x="15" y="14" width="6" height="6"/></svg>結果</button>
+  <button data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>設定</button>
+</nav>
+
+<div id="print"></div>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
+<input type="file" id="xlsxIn" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+
+<script>
+"use strict";
+const KEY = "yosakoi-v1";
+const SLOTS = ["A","B","C"];
+const WHO = {A:"1人目", B:"2人目", C:"3人目"};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = () => Math.random().toString(36).slice(2, 9);
+const fmt = n => (n < 0 ? "−" + Math.abs(n) : String(n));
+
+/* ---------- データ ---------- */
+function blank(){
+  return {
+    title: "",
+    items: [
+      {id:uid(), name:"衣装", max:10, mult:1, tie:false},
+      {id:uid(), name:"楽曲", max:10, mult:1, tie:false},
+      {id:uid(), name:"踊り", max:10, mult:1, tie:false},
+      {id:uid(), name:"個性・感動（強み）", max:10, mult:2, tie:true},
+      {id:uid(), name:"個性・感動（熱）", max:10, mult:4, tie:true},
+    ],
+    teams: [], judges: [],
+    rules: [{id:uid(), name:"演舞時間", pts:-35}, {id:uid(), name:"鳴子", pts:-35}],
+    deds: [],
+    entries: {A:{}, B:{}, C:{}},
+    checkers: 3, perPage: 3,
+    ui: {tab:"input", slot:"A", judge:null, part:null},
+  };
+}
+let S = load();
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){ const d = JSON.parse(raw); const b = blank(); return {...b, ...d, entries:{...b.entries, ...(d.entries||{})}, ui:{...b.ui, ...(d.ui||{})}}; }
+  }catch(e){}
+  return blank();
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast("保存できませんでした（ブラウザの保存領域を確認してください）"); } }
+const k = (tid, jid) => tid + "|" + jid;
+const parts = () => [...new Set(S.teams.map(t => t.part))].sort((a,b) => a - b);
+const teamsOf = p => S.teams.filter(t => t.part === p);
+const activeSlots = () => SLOTS.slice(0, S.checkers);
+
+function sheetScore(sc){ // 1人の審査員の点（倍率込み）
+  let sum = 0, tie = 0, filled = 0;
+  S.items.forEach(it => { const v = sc?.[it.id]; if(v != null){ filled++; sum += v * it.mult; if(it.tie) tie += v * it.mult; } });
+  return {sum, tie, filled, complete: filled === S.items.length};
+}
+const maxPerJudge = () => S.items.reduce((s, it) => s + it.max * it.mult, 0);
+
+function results(){
+  const rows = S.teams.map(t => {
+    let sum = 0, tie = 0, missing = 0;
+    const per = S.judges.map(j => { const r = sheetScore(S.entries.A[k(t.id, j.id)]); sum += r.sum; tie += r.tie; if(!r.complete) missing++; return r; });
+    const ded = S.deds.filter(d => d.team === t.id).reduce((s, d) => s + (S.rules.find(r => r.id === d.rule)?.pts || 0), 0);
+    return {t, sum, tie, ded, total: sum + ded, missing, per};
+  });
+  rows.forEach(r => { r.rank = rows.filter(o => o.total > r.total || (o.total === r.total && o.tie > r.tie)).length + 1; });
+  rows.forEach(r => { r.sameRank = rows.filter(o => o.rank === r.rank).length > 1; });
+  return rows.sort((a, b) => a.rank - b.rank || S.teams.indexOf(a.t) - S.teams.indexOf(b.t));
+}
+
+/* 照合: 同じ紙を別々に打ち込んだ点数を比べる */
+const sig = sc => S.items.map(it => sc?.[it.id] ?? "").join("/");
+const has = sc => sc && S.items.some(it => sc[it.id] != null);
+function compare(){
+  const out = [];
+  const slots = activeSlots();
+  S.teams.forEach(t => S.judges.forEach(j => {
+    const key = k(t.id, j.id);
+    const sc = slots.map(s => S.entries[s][key]);
+    const missingSlots = slots.filter((s, i) => !has(sc[i]));
+    let status = "ok", why = "";
+    if(missingSlots.length){ status = "missing"; why = missingSlots.map(s => WHO[s]).join("・") + "が未入力"; }
+    else {
+      const g = sc.map(sig);
+      if(g.every(x => x === g[0])) status = "ok";
+      else if(slots.length === 2){ status = "diff"; why = "2人の点数が違います"; }
+      else if(g[1] === g[2]){ status = "diff"; why = "1人目だけ違います（結果に使うのは1人目の入力です）"; }
+      else if(g[0] === g[1]){ status = "diff"; why = "3人目だけ違います"; }
+      else if(g[0] === g[2]){ status = "diff"; why = "2人目だけ違います"; }
+      else { status = "diff"; why = "3人とも違います"; }
+      if(status === "ok" && !sheetScore(sc[0]).complete){ status = "gap"; why = "空いている項目があります"; }
+    }
+    out.push({t, j, key, sc, status, why});
+  }));
+  return out;
+}
+
+/* ---------- 画面 ---------- */
+const TITLES = {input:"入力", ded:"減点", check:"照合", result:"結果", settings:"設定"};
+function render(){
+  const tab = S.ui.tab;
+  document.querySelectorAll(".tabs button").forEach(b => b.dataset.tab === tab ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+  $("#screenTitle").textContent = TITLES[tab];
+  $("#evName").textContent = S.title;
+  const main = $("#main");
+  main.innerHTML = ({input:vInput, ded:vDed, check:vCheck, result:vResult, settings:vSettings}[tab])();
+  main.className = "wrap";
+  // 照合タブの数字
+  if(S.checkers > 1 && S.teams.length && S.judges.length){
+    const n = compare().filter(c => c.status === "diff").length;
+    n ? $("#checkBadge").setAttribute("data-n", n) : $("#checkBadge").removeAttribute("data-n");
+  } else $("#checkBadge").removeAttribute("data-n");
+}
+
+function needSetup(){
+  return `<section class="card empty">
+    <h2>まず、チームと審査員を入れましょう</h2>
+    <p class="hint">集計用のExcel（よさこい審査集計）があれば、そのまま読み込めます。</p>
+    <div class="row" style="justify-content:center">
+      <button class="btn primary" data-act="xlsx">Excelから読み込む</button>
+      <button class="btn" data-act="goto" data-v="settings">自分で入れる</button>
+    </div>
+    <button class="small" data-act="sample" style="justify-self:center">サンプルで試してみる</button>
+  </section>`;
+}
+
+/* 入力 */
+function vInput(){
+  if(!S.teams.length || !S.judges.length) return needSetup();
+  const ps = parts();
+  if(!S.judges.some(j => j.id === S.ui.judge)) S.ui.judge = S.judges[0].id;
+  if(!ps.includes(S.ui.part)) S.ui.part = ps[0];
+  if(!activeSlots().includes(S.ui.slot)) S.ui.slot = "A";
+  const slot = S.ui.slot, E = S.entries[slot];
+  const j = S.judges.find(x => x.id === S.ui.judge), p = S.ui.part;
+  const ts = teamsOf(p);
+
+  let h = "";
+  if(S.checkers > 1){
+    h += `<section class="card">
+      <div class="lbl">打ち込む人</div>
+      <div class="seg">${activeSlots().map(s => `<button data-act="slot" data-v="${s}" aria-pressed="${s === slot}">${WHO[s]}</button>`).join("")}</div>
+      <p class="hint">打ち間違いを見つけるため、${S.checkers}人がそれぞれ同じ紙を全部打ち込みます。別のスマホで打った分は「照合」で取り込めます。</p>
+    </section>`;
+  }
+  // どの紙まで打ったかの表
+  h += `<section class="card"><div class="row" style="justify-content:space-between"><h2>審査用紙</h2><span class="hint">${WHO[slot]}の入力</span></div>
+    <div class="grid-prog"><table><thead><tr><th class="jn">審査員</th>${ps.map(x => `<th>第${x}部</th>`).join("")}</tr></thead><tbody>
+    ${S.judges.map(jj => `<tr><th class="jn" title="${esc(jj.name)}">${esc(jj.name)}</th>${ps.map(x => {
+      const tt = teamsOf(x); const done = tt.filter(t => sheetScore(E[k(t.id, jj.id)]).complete).length; const any = tt.some(t => has(E[k(t.id, jj.id)]));
+      const cls = done === tt.length ? "done" : any ? "part" : "";
+      const cur = jj.id === j.id && x === p ? " cur" : "";
+      return `<td class="${cls}${cur}"><button data-act="sheet" data-j="${jj.id}" data-p="${x}" aria-label="${esc(jj.name)} 第${x}部">${done === tt.length ? "済" : done + "/" + tt.length}</button></td>`;
+    }).join("")}</tr>`).join("")}
+    </tbody></table></div>
+    <p class="hint">マスを押すと、その紙を開きます。緑は打ち終わり、黄色は途中です。</p>
+  </section>`;
+
+  h += `<section class="card sheet-head"><span class="hint">いま打っている紙</span><b>${esc(j.name)}　第${p}部</b><span class="hint">紙で〇がついている数字を押してください。もう一度押すと取り消せます。</span></section>`;
+
+  ts.forEach(t => {
+    const sc = E[k(t.id, j.id)] || {};
+    const r = sheetScore(sc);
+    h += `<section class="card team" id="t-${t.id}">
+      <div class="team-h"><div><h3>${esc(t.name)}</h3>${t.theme ? `<div class="theme">${esc(t.theme)}</div>` : ""}</div>
+        <div class="sub${r.complete ? " done" : ""}">${r.sum}<small>${r.complete ? "済　" : ""}/ ${maxPerJudge()}</small></div></div>
+      ${S.items.map(it => {
+        const v = sc[it.id];
+        return `<div class="item"><div class="item-h"><span>${esc(it.name)}${it.mult > 1 ? ` <span class="mul">×${it.mult}</span>` : ""}</span><span class="pts">${v != null && it.mult > 1 ? v + "×" + it.mult + "＝" + v * it.mult : ""}</span></div>
+          <div class="scores${it.max === 10 ? " n10" : ""}" role="group" aria-label="${esc(it.name)}">${Array.from({length: it.max}, (_, i) => i + 1).map(n => `<button data-act="score" data-t="${t.id}" data-i="${it.id}" data-v="${n}" aria-pressed="${v === n}">${n}</button>`).join("")}</div></div>`;
+      }).join("")}
+    </section>`;
+  });
+
+  // 次の紙へ
+  const order = []; S.judges.forEach(jj => ps.forEach(x => order.push([jj.id, x])));
+  const idx = order.findIndex(([a, b]) => a === j.id && b === p);
+  const prev = order[idx - 1], next = order[idx + 1];
+  const nm = o => o ? esc(S.judges.find(x => x.id === o[0]).name) + " 第" + o[1] + "部" : "";
+  h += `<div class="nav-sheet">
+    ${prev ? `<button class="btn" data-act="sheet" data-j="${prev[0]}" data-p="${prev[1]}" data-top="1">← ${nm(prev)}</button>` : "<span></span>"}
+    ${next ? `<button class="btn primary" data-act="sheet" data-j="${next[0]}" data-p="${next[1]}" data-top="1">${nm(next)} →</button>` : ""}
+  </div>`;
+  if(slot !== "A"){
+    h += `<section class="card"><h2>${WHO[slot]}の入力を渡す</h2>
+      <p class="hint">このスマホで打った${WHO[slot]}の分を、集計するスマホやパソコンに送ります。受け取った人は「照合」→「入力を取り込む」で読み込みます。</p>
+      <button class="btn" data-act="sendEntries">${WHO[slot]}の入力をファイルで送る</button></section>`;
+  }
+  return h;
+}
+
+/* 減点 */
+function vDed(){
+  if(!S.teams.length) return needSetup();
+  let h = `<section class="card"><p class="hint">減点はここに一度だけ入れます（照合はしません）。減点の種類と点数は「設定」で変えられます。</p>
+    ${S.rules.length ? "" : `<p class="hint">減点の種類がまだありません。</p>`}</section>`;
+  parts().forEach(p => {
+    h += `<section class="card"><h2>第${p}部</h2><div>`;
+    teamsOf(p).forEach(t => {
+      const ds = S.deds.filter(d => d.team === t.id);
+      const sum = ds.reduce((s, d) => s + (S.rules.find(r => r.id === d.rule)?.pts || 0), 0);
+      h += `<div class="ded-team"><div style="min-width:0"><b>${esc(t.name)}</b>
+        ${ds.length ? `<div class="ded-list">${ds.map(d => { const r = S.rules.find(x => x.id === d.rule); return `<span class="tag">${esc(r?.name || "（消えた種類）")} ${fmt(r?.pts || 0)}<button data-act="dedDel" data-v="${d.id}" aria-label="取り消す">×</button></span>`; }).join("")}</div>` : ""}
+        </div>
+        <div class="row" style="flex:none">${sum ? `<b class="num" style="color:var(--danger)">${fmt(sum)}</b>` : ""}
+        <select data-act="dedAdd" data-t="${t.id}" aria-label="${esc(t.name)}に減点を足す" style="width:auto"><option value="">＋減点</option>${S.rules.map(r => `<option value="${r.id}">${esc(r.name)}（${fmt(r.pts)}）</option>`).join("")}</select></div></div>`;
+    });
+    h += `</div></section>`;
+  });
+  return h;
+}
+
+/* 照合 */
+function vCheck(){
+  if(!S.teams.length || !S.judges.length) return needSetup();
+  if(S.checkers === 1){
+    return `<section class="card"><h2>照合はしない設定です</h2><p class="hint">1人だけで打ち込む設定になっています。打ち間違いを見つけたいときは、「設定」の「打ち込む人数」を2人か3人にしてください。</p>
+      ${gapCard()}</section>`;
+  }
+  const c = compare();
+  const need = S.teams.length * S.judges.length;
+  const cnt = s => c.filter(x => x.status === s).length;
+  const ok = cnt("ok"), diff = cnt("diff"), miss = cnt("missing"), gap = cnt("gap");
+  const allOk = ok === need;
+  let h = allOk
+    ? `<div class="banner ok">✓<div>${S.checkers}人の入力がすべて一致しました<span>このまま「結果」で順位を見て大丈夫です。</span></div></div>`
+    : `<div class="banner warn">⚠<div>まだ確かめるところがあります<span>下の一覧を、紙の審査用紙と見比べて直してください。</span></div></div>`;
+  h += `<section class="card"><div class="counts">
+    <div class="good"><small>一致</small><b>${ok}<span class="hint"> / ${need}</span></b></div>
+    <div class="${diff ? "bad" : ""}"><small>点数が違う</small><b>${diff}</b></div>
+    <div class="${miss ? "bad" : ""}"><small>まだ入っていない</small><b>${miss}</b></div>
+    ${gap ? `<div class="bad"><small>空いた項目あり</small><b>${gap}</b></div>` : ""}
+  </div>
+  <div class="row">${activeSlots().map(s => { const n = Object.keys(S.entries[s]).filter(key => has(S.entries[s][key])).length; return `<span class="hint">${WHO[s]}: ${n}枚分</span>`; }).join("")}</div>
+  <div class="row"><button class="btn" data-act="importEntries">入力を取り込む</button></div>
+  <p class="hint">別のスマホで打った人から届いたファイルを読み込みます。</p></section>`;
+
+  const bad = c.filter(x => x.status === "diff" || x.status === "gap");
+  if(bad.length){
+    h += `<section class="card"><h2>点数が違うところ（${bad.length}）</h2><p class="hint">紙を見て、正しい人の「○人目が正しい」を押すと、全員の入力がその点数にそろいます。どれも違うときは「入力を直す」で打ち直してください。</p>`;
+    bad.forEach(x => {
+      const versions = []; x.sc.forEach(sc => { const g = sig(sc); if(!versions.includes(g)) versions.push(g); });
+      h += `<div class="mm"><div class="mm-h"><b>${esc(x.t.name)}<span class="hint" style="display:block">${esc(x.j.name)}・第${x.t.part}部</span></b><span class="why">${esc(x.why)}</span></div>
+        <div class="cmp"><table><thead><tr><th class="who"></th>${S.items.map(it => `<th>${esc(it.name.replace(/^個性・感動/, ""))}</th>`).join("")}<th>小計</th></tr></thead><tbody>
+        ${activeSlots().map((s, i) => `<tr><th class="who">${WHO[s]}</th>${S.items.map(it => {
+          const vals = x.sc.map(sc => sc?.[it.id] ?? null); const d = vals.some(v => v !== vals[0]);
+          return `<td class="${d ? "diff" : ""}">${x.sc[i]?.[it.id] ?? "・"}</td>`; }).join("")}<td>${sheetScore(x.sc[i]).sum}</td></tr>`).join("")}
+        </tbody></table></div>
+        <div class="row">${activeSlots().map(s => `<button class="small" data-act="pick" data-key="${x.key}" data-s="${s}">${WHO[s]}が正しい</button>`).join("")}</div>
+        <div class="row">${activeSlots().map(s => `<button class="small" data-act="fix" data-s="${s}" data-j="${x.j.id}" data-p="${x.t.part}" data-t="${x.t.id}">${WHO[s]}の入力を直す</button>`).join("")}</div></div>`;
+    });
+    h += `</section>`;
+  }
+  const ms = c.filter(x => x.status === "missing");
+  if(ms.length){
+    const bySlot = {};
+    ms.forEach(x => activeSlots().forEach((s, i) => { if(!has(x.sc[i])){ const g = (bySlot[s] ||= {}); const kk = x.j.id + "|" + x.t.part; g[kk] = g[kk] || {j:x.j, p:x.t.part, n:0}; g[kk].n++; } }));
+    h += `<section class="card"><h2>まだ入っていない紙</h2>`;
+    activeSlots().forEach(s => { const g = bySlot[s]; if(!g) return;
+      h += `<div><div class="lbl">${WHO[s]}</div><div class="chips" style="margin-top:6px">${Object.values(g).map(o => `<button class="chip" data-act="fix" data-s="${s}" data-j="${o.j.id}" data-p="${o.p}">${esc(o.j.name)} 第${o.p}部（${o.n}）</button>`).join("")}</div></div>`; });
+    h += `</section>`;
+  }
+  return h;
+}
+function gapCard(){
+  const g = [];
+  S.teams.forEach(t => S.judges.forEach(j => { if(!sheetScore(S.entries.A[k(t.id, j.id)]).complete) g.push({t, j}); }));
+  if(!g.length) return `<div class="banner ok">✓<div>全部の紙が入っています</div></div>`;
+  return `<div class="banner warn">⚠<div>まだ入っていない点数が ${g.length}件あります</div></div>`;
+}
+
+/* 結果 */
+function vResult(){
+  if(!S.teams.length || !S.judges.length) return needSetup();
+  const rs = results();
+  const c = S.checkers > 1 ? compare() : null;
+  const missA = rs.reduce((s, r) => s + r.missing, 0);
+  let h = "";
+  if(c && c.some(x => x.status !== "ok")) h += `<div class="banner warn">⚠<div>照合がまだ終わっていません<span>「照合」で点数が違うところ・入っていない紙を確かめてから発表してください。</span></div></div>`;
+  else if(missA) h += `<div class="banner warn">⚠<div>まだ入っていない点数が ${missA}件あります<span>空いた項目は0点として計算しています。</span></div></div>`;
+  else h += `<div class="banner ok">✓<div>全部そろっています${c ? "（照合も一致）" : ""}</div></div>`;
+
+  const top = [1, 2, 3].map(n => rs.filter(r => r.rank === n));
+  const warns = [];
+  [1, 2, 3].forEach(n => { if(top[n - 1].length > 1) warns.push(`${n}位が${top[n - 1].length}チームあります（総合点も個性点も同じ）`); });
+  const r3 = rs.find(r => r.rank === 3), r4 = rs.find(r => r.rank === 4);
+  if(r3 && r4 && r3.total === r4.total) warns.push(`3位と4位が総合点で同点です（個性点で分かれています）。発表前に確認してください`);
+  const tieByPoint = new Set(); rs.forEach(r => { if(rs.some(o => o !== r && o.total === r.total)) tieByPoint.add(r.t.id); });
+
+  h += `<section class="card"><div class="row" style="justify-content:space-between"><h2>上位3チーム</h2><button class="btn primary" data-act="show">発表する</button></div>
+    <div class="podium">${[1, 2, 3].map(n => top[n - 1].map(r => `<div class="pod"><span class="medal m${n}">${n}位</span><span class="nm">${esc(r.t.name)}</span><span class="tot">${r.total}<small>個性点 ${r.tie}</small></span></div>`).join("")).join("")}</div>
+    ${warns.map(w => `<div class="banner warn">⚠<div>${esc(w)}</div></div>`).join("")}
+  </section>`;
+
+  h += `<section class="card"><div class="row" style="justify-content:space-between"><h2>全チームの順位</h2><button class="small" data-act="csv">表（CSV）を保存</button></div>
+    <p class="hint">総合点＝審査員${S.judges.length}人の合計＋減点。総合点が同じときは「個性点」（${esc(S.items.filter(i => i.tie).map(i => i.name).join("・") || "なし")}の合計）が高い方が上です。チームを押すと審査員ごとの点が出ます。</p>
+    <div class="rank-list">${rs.map(r => `<div class="rk"><button data-act="open" data-v="${r.t.id}" aria-expanded="${openRow === r.t.id}">
+      <span class="no">${r.rank}</span>
+      <span><span class="nm">${esc(r.t.name)}</span><span class="meta">第${r.t.part}部・審査員 ${r.sum}${r.ded ? "・減点 " + fmt(r.ded) : ""}・<span class="${tieByPoint.has(r.t.id) ? "tie" : ""}">個性点 ${r.tie}</span>${r.missing ? `・<span class="tie">未入力${r.missing}</span>` : ""}</span></span>
+      <span class="tot">${r.total}</span></button>
+      ${openRow === r.t.id ? detail(r) : ""}</div>`).join("")}</div>
+  </section>`;
+  return h;
+}
+let openRow = null;
+function detail(r){
+  return `<div class="detail cmp"><table><thead><tr><th class="who">審査員</th>${S.items.map(it => `<th>${esc(it.name.replace(/^個性・感動/, ""))}${it.mult > 1 ? "×" + it.mult : ""}</th>`).join("")}<th>小計</th></tr></thead><tbody>
+    ${S.judges.map((j, i) => { const sc = S.entries.A[k(r.t.id, j.id)] || {}; return `<tr><th class="who">${esc(j.name)}</th>${S.items.map(it => `<td>${sc[it.id] ?? "・"}</td>`).join("")}<td>${r.per[i].sum}</td></tr>`; }).join("")}
+    <tr><th class="who">減点</th><td colspan="${S.items.length}">${S.deds.filter(d => d.team === r.t.id).map(d => esc(S.rules.find(x => x.id === d.rule)?.name || "")).join("・") || "なし"}</td><td>${fmt(r.ded)}</td></tr>
+    <tr><th class="who">総合点</th><td colspan="${S.items.length}"></td><td><b>${r.total}</b></td></tr>
+  </tbody></table></div>`;
+}
+
+/* 設定 */
+function vSettings(){
+  const mx = maxPerJudge();
+  const ps = parts();
+  return `
+  <section class="card"><h2>大会</h2>
+    <label class="lbl" for="title">大会名（審査用紙に印刷されます）</label>
+    <input type="text" id="title" data-set="title" value="${esc(S.title)}" placeholder="例：第16回 青春グランプリ">
+    <div class="row"><button class="btn" data-act="xlsx">Excelから読み込む</button></div>
+    <p class="hint">「よさこい審査集計」のExcelから、チーム・審査員・審査項目・減点・打ち込んだ点数をまとめて読み込みます。</p>
+  </section>
+
+  <details class="card" ${S.teams.length ? "" : "open"}><summary>チーム<small>${S.teams.length}チーム・${ps.length}部</small></summary>
+    <p class="hint">演舞の順に並べてください。審査用紙と入力画面もこの順になります。</p>
+    <div class="list">${S.teams.map((t, i) => `<div class="li"><div class="mv"><button data-act="mv" data-l="teams" data-i="${i}" data-d="-1" aria-label="上へ">▲</button><button data-act="mv" data-l="teams" data-i="${i}" data-d="1" aria-label="下へ">▼</button></div>
+      <div class="fields team"><label>部<input type="number" min="1" inputmode="numeric" data-ed="teams" data-i="${i}" data-f="part" value="${t.part}"></label>
+      <label>チーム名<input type="text" data-ed="teams" data-i="${i}" data-f="name" value="${esc(t.name)}"></label>
+      <label class="theme">演舞テーマ<input type="text" data-ed="teams" data-i="${i}" data-f="theme" value="${esc(t.theme)}"></label></div>
+      <button class="x" data-act="del" data-l="teams" data-i="${i}" aria-label="消す">×</button></div>`).join("")}</div>
+    <div class="row"><button class="btn" data-act="add" data-l="teams">＋ チームを足す</button><button class="small" data-act="bulk" data-l="teams">まとめて入力</button></div>
+    ${bulkOpen === "teams" ? bulkBox("teams", "1行に1チーム。「部, チーム名, 演舞テーマ」の順に、カンマかタブで区切ります。Excelからコピーして貼り付けてもOK。", S.teams.map(t => [t.part, t.name, t.theme].join("\t")).join("\n")) : ""}
+  </details>
+
+  <details class="card" ${S.judges.length ? "" : "open"}><summary>審査員<small>${S.judges.length}人</small></summary>
+    <div class="list">${S.judges.map((j, i) => `<div class="li"><div class="mv"><button data-act="mv" data-l="judges" data-i="${i}" data-d="-1" aria-label="上へ">▲</button><button data-act="mv" data-l="judges" data-i="${i}" data-d="1" aria-label="下へ">▼</button></div>
+      <div class="fields"><input type="text" aria-label="審査員の名前" data-ed="judges" data-i="${i}" data-f="name" value="${esc(j.name)}"></div>
+      <button class="x" data-act="del" data-l="judges" data-i="${i}" aria-label="消す">×</button></div>`).join("")}</div>
+    <div class="row"><button class="btn" data-act="add" data-l="judges">＋ 審査員を足す</button><button class="small" data-act="bulk" data-l="judges">まとめて入力</button></div>
+    ${bulkOpen === "judges" ? bulkBox("judges", "1行に1人ずつ名前を書きます。", S.judges.map(j => j.name).join("\n")) : ""}
+  </details>
+
+  <details class="card"><summary>審査項目<small>1人 ${mx}点満点</small></summary>
+    <p class="hint">上限＝紙で〇をつける一番大きい数字。倍率＝紙の「×2」「×4」（等倍は1）。打ち込むのは紙の数字そのままで、倍率はアプリがかけます。「同点判定」に印をつけた項目の合計が、総合点が同じときの決め手（個性点）になります。</p>
+    <div class="list">${S.items.map((it, i) => `<div class="li"><div class="mv"><button data-act="mv" data-l="items" data-i="${i}" data-d="-1" aria-label="上へ">▲</button><button data-act="mv" data-l="items" data-i="${i}" data-d="1" aria-label="下へ">▼</button></div>
+      <div class="fields item"><label>項目名<input type="text" data-ed="items" data-i="${i}" data-f="name" value="${esc(it.name)}"></label>
+      <label>上限<input type="number" min="1" max="20" inputmode="numeric" data-ed="items" data-i="${i}" data-f="max" value="${it.max}"></label>
+      <label>倍率<input type="number" min="1" inputmode="decimal" data-ed="items" data-i="${i}" data-f="mult" value="${it.mult}"></label>
+      <label class="tiebox"><input type="checkbox" data-ed="items" data-i="${i}" data-f="tie" ${it.tie ? "checked" : ""}>同点判定</label></div>
+      <button class="x" data-act="del" data-l="items" data-i="${i}" aria-label="消す">×</button></div>`).join("")}</div>
+    <div class="row"><button class="btn" data-act="add" data-l="items">＋ 項目を足す</button></div>
+  </details>
+
+  <details class="card"><summary>減点の種類<small>${S.rules.length}種類</small></summary>
+    <div class="list">${S.rules.map((r, i) => `<div class="li"><div class="mv"></div>
+      <div class="fields rule"><label>名前<input type="text" data-ed="rules" data-i="${i}" data-f="name" value="${esc(r.name)}"></label>
+      <label>減点（点）<input type="number" min="0" inputmode="numeric" data-ed="rules" data-i="${i}" data-f="pts" value="${Math.abs(r.pts)}"></label></div>
+      <button class="x" data-act="del" data-l="rules" data-i="${i}" aria-label="消す">×</button></div>`).join("")}</div>
+    <div class="row"><button class="btn" data-act="add" data-l="rules">＋ 減点の種類を足す</button></div>
+  </details>
+
+  <section class="card"><h2>打ち込む人数</h2>
+    <div class="seg">${[1, 2, 3].map(n => `<button data-act="checkers" data-v="${n}" aria-pressed="${S.checkers === n}">${n}人</button>`).join("")}</div>
+    <p class="hint">2人以上にすると、同じ紙を別々に打ち込んで点数を突き合わせます（Excelと同じ3人がおすすめ）。順位に使うのは1人目の入力です。</p>
+  </section>
+
+  <section class="card"><h2>審査用紙を印刷</h2>
+    <div class="fields" style="grid-template-columns:1fr 1fr 1fr">
+      <label>採点者<select id="pJudge"><option value="">全員</option>${S.judges.map(j => `<option value="${j.id}">${esc(j.name)}</option>`).join("")}</select></label>
+      <label>部<select id="pPart"><option value="">全部</option>${ps.map(p => `<option value="${p}">第${p}部</option>`).join("")}</select></label>
+      <label>1枚のチーム数<input type="number" id="pPer" min="1" max="8" inputmode="numeric" value="${S.perPage}"></label>
+    </div>
+    <button class="btn" data-act="print" ${S.teams.length && S.judges.length ? "" : "disabled"}>印刷する</button>
+    <p class="hint">A4縦。採点者ごと・部ごとに紙が分かれます。</p>
+  </section>
+
+  <section class="card"><h2>データ</h2>
+    <p class="hint">データはこのスマホ（ブラウザ）の中だけに保存されます。別の人に設定を配るときは「設定を配る」、機種変更や念のための控えは「全部を保存」を使います。</p>
+    <div class="row">
+      <button class="btn" data-act="sendSettings">設定を配る</button>
+      <button class="btn" data-act="backup">全部を保存</button>
+      <button class="btn" data-act="restore">ファイルを読み込む</button>
+    </div>
+    <div class="row">
+      <button class="small" data-act="sample">サンプルで試す</button>
+      <button class="small" data-act="clearScores" style="color:var(--danger)">点数と減点だけ消す</button>
+      <button class="small" data-act="reset" style="color:var(--danger)">全部消す</button>
+    </div>
+  </section>`;
+}
+let bulkOpen = null;
+function bulkBox(l, hint, val){
+  return `<div class="card" style="background:var(--bg)"><p class="hint">${hint}</p><textarea id="bulkText">${esc(val)}</textarea>
+    <div class="row"><button class="btn primary" data-act="bulkSave" data-l="${l}">この内容にする</button><button class="btn" data-act="bulk" data-l="">やめる</button></div></div>`;
+}
+
+/* ---------- 操作 ---------- */
+let undoFn = null, toastTimer = null;
+function toast(msg, undo){
+  document.querySelector(".toast")?.remove();
+  const d = document.createElement("div"); d.className = "toast"; d.setAttribute("role", "status");
+  d.innerHTML = `<span>${esc(msg)}</span>${undo ? `<button>元に戻す</button>` : ""}`;
+  document.body.appendChild(d);
+  undoFn = undo || null;
+  d.querySelector("button")?.addEventListener("click", () => { undoFn?.(); d.remove(); });
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => d.remove(), undo ? 6000 : 3000);
+}
+function snapshot(){ const s = JSON.stringify(S); return () => { S = JSON.parse(s); save(); render(); }; }
+
+document.addEventListener("click", e => {
+  const tb = e.target.closest(".tabs button");
+  if(tb){ S.ui.tab = tb.dataset.tab; save(); render(); scrollTo(0, 0); return; }
+  const b = e.target.closest("[data-act]"); if(!b || b.tagName === "SELECT") return;
+  const a = b.dataset.act, d = b.dataset;
+  const L = d.l ? S[d.l] : null, i = +d.i;
+  switch(a){
+    case "goto": S.ui.tab = d.v; break;
+    case "slot": S.ui.slot = d.v; break;
+    case "sheet": S.ui.judge = d.j; S.ui.part = +d.p; save(); render(); if(d.top) scrollToSheet(); return;
+    case "score": {
+      const key = k(d.t, S.ui.judge); const E = S.entries[S.ui.slot]; const sc = E[key] ||= {};
+      const v = +d.v; if(sc[d.i] === v) delete sc[d.i]; else sc[d.i] = v;
+      if(!Object.keys(sc).length) delete E[key];
+      save(); const y = scrollY; render(); scrollTo(0, y); return;
+    }
+    case "fix": S.ui.tab = "input"; S.ui.slot = d.s; S.ui.judge = d.j; S.ui.part = +d.p; save(); render();
+      requestAnimationFrame(() => { const el = d.t && document.getElementById("t-" + d.t); el ? el.scrollIntoView({block:"start"}) : scrollToSheet(); }); return;
+    case "pick": {
+      const und = snapshot(); const src = S.entries[d.s][d.key];
+      activeSlots().forEach(s => { S.entries[s][d.key] = {...src}; });
+      save(); render(); toast(WHO[d.s] + "の点数に合わせました", und); return;
+    }
+    case "dedDel": { const und = snapshot(); S.deds = S.deds.filter(x => x.id !== d.v); save(); render(); toast("減点を取り消しました", und); return; }
+    case "importEntries": pickFile(importEntries); return;
+    case "sendEntries": sendEntries(); return;
+    case "open": openRow = openRow === d.v ? null : d.v; { const y = scrollY; render(); scrollTo(0, y); } return;
+    case "show": startShow(); return;
+    case "csv": downloadCSV(); return;
+    case "add": {
+      if(d.l === "teams"){ const ps = parts(); L.push({id:uid(), name:"", part: ps.length ? ps[ps.length - 1] : 1, theme:""}); }
+      else if(d.l === "judges") L.push({id:uid(), name:""});
+      else if(d.l === "items") L.push({id:uid(), name:"", max:10, mult:1, tie:false});
+      else if(d.l === "rules") L.push({id:uid(), name:"", pts:-10});
+      save(); render(); openSection(d.l, true); return;
+    }
+    case "del": {
+      const und = snapshot(); const it = L[i]; L.splice(i, 1);
+      if(d.l === "rules") S.deds = S.deds.filter(x => x.rule !== it.id);
+      if(d.l === "teams") S.deds = S.deds.filter(x => x.team !== it.id);
+      save(); render(); openSection(d.l); toast((it.name || "空の行") + "を消しました", () => { und(); openSection(d.l); }); return;
+    }
+    case "mv": { const j = i + +d.d; if(j < 0 || j >= L.length) return; [L[i], L[j]] = [L[j], L[i]]; save(); render(); openSection(d.l); return; }
+    case "bulk": bulkOpen = d.l || null; render(); if(d.l) openSection(d.l); return;
+    case "bulkSave": bulkSave(d.l); return;
+    case "checkers": S.checkers = +d.v; break;
+    case "print": doPrint(); return;
+    case "xlsx": $("#xlsxIn").click(); return;
+    case "sendSettings": shareJSON({app:"yosakoi", kind:"settings", settings: settingsOf(S)}, "審査の設定"); return;
+    case "backup": shareJSON({app:"yosakoi", kind:"backup", data: {...S, ui: undefined}}, "審査データ（全部）"); return;
+    case "restore": pickFile(restoreFile); return;
+    case "sample": if(!hasData() || confirm("いまのデータを消して、サンプルを入れますか？")){ const und = snapshot(); S = sample(); save(); render(); toast("サンプルを入れました", und); } return;
+    case "clearScores": if(confirm("打ち込んだ点数と減点を全部消しますか？（チームや審査員は残ります）")){ const und = snapshot(); S.entries = {A:{}, B:{}, C:{}}; S.deds = []; save(); render(); toast("点数と減点を消しました", und); } return;
+    case "reset": if(confirm("全部消しますか？")){ const und = snapshot(); S = blank(); save(); render(); toast("全部消しました", und); } return;
+    default: return;
+  }
+  save(); render();
+});
+function scrollToSheet(){ requestAnimationFrame(() => document.querySelector(".sheet-head")?.scrollIntoView({block:"start"})); }
+function openSection(l, focusLast){
+  const map = {teams:0, judges:1, items:2, rules:3};
+  const el = document.querySelectorAll("details.card")[map[l]]; if(!el) return; el.open = true;
+  if(focusLast){ const ins = el.querySelectorAll(".li input[type=text]"); ins[ins.length - 1]?.focus(); }
+}
+const hasData = () => S.teams.length || S.judges.length || SLOTS.some(s => Object.keys(S.entries[s]).length);
+
+document.addEventListener("change", e => {
+  const el = e.target;
+  if(el.dataset.act === "dedAdd"){
+    if(el.value){ S.deds.push({id:uid(), team: el.dataset.t, rule: el.value}); save(); const y = scrollY; render(); scrollTo(0, y); }
+    return;
+  }
+  if(el.dataset.ed){
+    const it = S[el.dataset.ed][+el.dataset.i], f = el.dataset.f;
+    if(el.type === "checkbox") it[f] = el.checked;
+    else if(f === "part") it[f] = Math.max(1, Math.round(+el.value || 1));
+    else if(f === "max") it[f] = Math.min(20, Math.max(1, Math.round(+el.value || 10)));
+    else if(f === "mult") it[f] = +el.value > 0 ? +el.value : 1;
+    else if(f === "pts") it[f] = -Math.abs(+el.value || 0);
+    else it[f] = el.value.trim();
+    save();
+    if(f !== "name" && f !== "theme" || el.dataset.ed === "items"){ const l = el.dataset.ed; render(); openSection(l); }
+    else $("#evName").textContent = S.title;
+    return;
+  }
+  if(el.dataset.set){ S[el.dataset.set] = el.value.trim(); save(); $("#evName").textContent = S.title; }
+  if(el.id === "pPer"){ S.perPage = Math.min(8, Math.max(1, Math.round(+el.value || 3))); save(); }
+});
+
+function bulkSave(l){
+  const lines = $("#bulkText").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const und = snapshot();
+  if(l === "teams"){
+    const old = S.teams; const used = new Set();
+    S.teams = lines.map(line => {
+      const c = line.split(/\t|,|，/).map(s => s.trim());
+      let part = 1, name, theme = "";
+      if(/^\d+$/.test(c[0]) && c.length > 1){ part = +c[0]; name = c[1]; theme = c.slice(2).join("、"); } else { name = c[0]; theme = c.slice(1).join("、"); }
+      const prev = old.find(t => t.name === name && !used.has(t.id)); if(prev) used.add(prev.id);
+      return {id: prev ? prev.id : uid(), name, part, theme};
+    });
+  } else {
+    const old = S.judges; const used = new Set();
+    S.judges = lines.map(name => { const prev = old.find(j => j.name === name && !used.has(j.id)); if(prev) used.add(prev.id); return {id: prev ? prev.id : uid(), name}; });
+  }
+  bulkOpen = null; save(); render(); openSection(l); toast("入れ替えました", und);
+}
+
+/* ---------- ファイルのやりとり ---------- */
+function settingsOf(s){ return {title:s.title, items:s.items, teams:s.teams, judges:s.judges, rules:s.rules, checkers:s.checkers, perPage:s.perPage}; }
+async function shareJSON(obj, name){
+  const date = new Date(); const stamp = `${date.getMonth() + 1}月${date.getDate()}日${String(date.getHours()).padStart(2, "0")}${String(date.getMinutes()).padStart(2, "0")}`;
+  const fname = `${name}_${stamp}.json`;
+  const blob = new Blob([JSON.stringify(obj)], {type:"application/json"});
+  const file = new File([blob], fname, {type:"application/json"});
+  if(navigator.canShare && navigator.canShare({files:[file]}) && matchMedia("(pointer:coarse)").matches){
+    try{ await navigator.share({files:[file], title:name}); return; }catch(e){ if(e.name === "AbortError") return; }
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fname; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast("ファイルを保存しました");
+}
+let fileCb = null;
+function pickFile(cb){ fileCb = cb; $("#fileIn").value = ""; $("#fileIn").click(); }
+$("#fileIn").addEventListener("change", async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{ const obj = JSON.parse(await f.text()); fileCb?.(obj); }catch(err){ toast("このファイルは読み込めませんでした"); }
+});
+
+function sendEntries(){
+  const s = S.ui.slot, E = S.entries[s];
+  const rows = [];
+  Object.entries(E).forEach(([key, sc]) => {
+    const [tid, jid] = key.split("|"); const t = S.teams.find(x => x.id === tid), j = S.judges.find(x => x.id === jid);
+    if(!t || !j) return;
+    const scores = {}; S.items.forEach(it => { if(sc[it.id] != null) scores[it.name] = sc[it.id]; });
+    rows.push({team:t.name, judge:j.name, scores});
+  });
+  shareJSON({app:"yosakoi", kind:"entries", slot:s, rows}, WHO[s] + "の入力");
+}
+function importEntries(obj){
+  if(obj?.app !== "yosakoi"){ toast("このアプリのファイルではありません"); return; }
+  if(obj.kind !== "entries"){ restoreFile(obj); return; }
+  let slot = obj.slot;
+  const pick = prompt(`何人目の入力として取り込みますか？（1〜${S.checkers}）`, String(SLOTS.indexOf(slot) + 1));
+  if(pick == null) return;
+  slot = SLOTS[Math.min(S.checkers, Math.max(1, +pick || 1)) - 1];
+  const und = snapshot();
+  let n = 0, skip = 0;
+  obj.rows.forEach(r => {
+    const t = S.teams.find(x => x.name === r.team), j = S.judges.find(x => x.name === r.judge);
+    if(!t || !j){ skip++; return; }
+    const sc = {}; S.items.forEach(it => { const v = r.scores[it.name]; if(v != null) sc[it.id] = +v; });
+    S.entries[slot][k(t.id, j.id)] = sc; n++;
+  });
+  save(); render();
+  toast(`${WHO[slot]}として${n}枚分を取り込みました` + (skip ? `（名前が合わない${skip}件は飛ばしました）` : ""), und);
+}
+function restoreFile(obj){
+  if(obj?.app !== "yosakoi"){ toast("このアプリのファイルではありません"); return; }
+  if(obj.kind === "entries"){ importEntries(obj); return; }
+  if(obj.kind === "settings"){
+    if(!confirm("届いた設定（チーム・審査員・項目など）に入れ替えますか？打ち込んだ点数は、名前が同じものは残ります。")) return;
+    const und = snapshot(); applySettings(obj.settings); save(); render(); toast("設定を入れ替えました", und); return;
+  }
+  if(obj.kind === "backup"){
+    if(!confirm("このファイルの内容で、いまのデータを全部置きかえますか？")) return;
+    const und = snapshot(); const ui = S.ui; const b = blank(); S = {...b, ...obj.data, entries:{...b.entries, ...(obj.data.entries || {})}, ui}; save(); render(); toast("読み込みました", und); return;
+  }
+  toast("このファイルは読み込めませんでした");
+}
+function applySettings(ns){
+  // 名前が同じチーム・審査員・項目は、打ち込んだ点数を引き継ぐ
+  const mapBy = (oldL, newL) => { const m = {}; oldL.forEach(o => { const n = newL.find(x => x.name === o.name); if(n) m[o.id] = n.id; }); return m; };
+  const tm = mapBy(S.teams, ns.teams), jm = mapBy(S.judges, ns.judges), im = mapBy(S.items, ns.items), rm = mapBy(S.rules, ns.rules);
+  SLOTS.forEach(s => { const ne = {}; Object.entries(S.entries[s]).forEach(([key, sc]) => {
+    const [t, j] = key.split("|"); if(!tm[t] || !jm[j]) return; const nsc = {}; Object.entries(sc).forEach(([iid, v]) => { if(im[iid]) nsc[im[iid]] = v; }); ne[k(tm[t], jm[j])] = nsc; }); S.entries[s] = ne; });
+  S.deds = S.deds.filter(d => tm[d.team] && rm[d.rule]).map(d => ({...d, team: tm[d.team], rule: rm[d.rule]}));
+  Object.assign(S, JSON.parse(JSON.stringify(ns)));
+}
+
+/* ---------- Excelの読み込み ---------- */
+let xlsxLib = null;
+function loadXLSX(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  return xlsxLib ||= new Promise((ok, ng) => { const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"; s.onload = () => ok(window.XLSX); s.onerror = () => { xlsxLib = null; ng(new Error("load")); }; document.head.appendChild(s); });
+}
+$("#xlsxIn").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if(!f) return;
+  toast("Excelを読み込んでいます…");
+  let X; try{ X = await loadXLSX(); }catch(err){ toast("読み込みの部品を取得できませんでした。電波のある所でもう一度試してください"); return; }
+  try{ const wb = X.read(await f.arrayBuffer(), {type:"array"}); importWorkbook(X, wb); }
+  catch(err){ console.error(err); toast("このExcelは読み込めませんでした"); }
+});
+function importWorkbook(X, wb){
+  const sh = n => wb.Sheets[n];
+  const val = (ws, addr) => { const c = ws?.[addr]; if(!c || c.v == null) return null; const v = typeof c.v === "string" ? c.v.trim() : c.v; return v === "" ? null : v; };
+  const set = sh("設定");
+  if(!set){ toast("「設定」シートが見つかりません（よさこい審査集計のExcelを選んでください）"); return; }
+  const ns = blank();
+  ns.items = []; for(let r = 2; r <= 11; r++){ const name = val(set, "A" + r); if(!name) continue; ns.items.push({id:uid(), name:String(name), max: Math.round(+val(set, "B" + r) || 10), mult: +val(set, "C" + r) || 1, tie: String(val(set, "E" + r) || "").includes("〇") || String(val(set, "E" + r) || "").includes("○")}); }
+  const ps = sh("用紙設定");
+  ns.teams = []; for(let r = 2; r <= 101; r++){ const name = val(set, "H" + r); if(!name) continue; ns.teams.push({id:uid(), name:String(name), part: Math.round(+val(ps, "B" + r) || 1), theme: String(val(ps, "C" + r) ?? "")}); }
+  ns.judges = []; for(let r = 2; r <= 101; r++){ const name = val(set, "I" + r); if(!name) continue; ns.judges.push({id:uid(), name:String(name)}); }
+  ns.rules = []; for(let r = 2; r <= 11; r++){ const name = val(set, "K" + r); if(!name) continue; ns.rules.push({id:uid(), name:String(name), pts: -Math.abs(+val(set, "L" + r) || 0)}); }
+  ns.title = String(val(ps, "F1") ?? "");
+  if(!ns.items.length || !ns.teams.length){ toast("審査項目かチームが見つかりませんでした"); return; }
+  const cols = "CDEFGHIJKL";
+  const counts = {};
+  [["審査入力", "A"], ["照合用入力B", "B"], ["照合用入力C", "C"]].forEach(([name, slot]) => {
+    const ws = sh(name); counts[slot] = 0; if(!ws) return;
+    for(let r = 2; r <= 2000; r++){
+      const tn = val(ws, "A" + r), jn = val(ws, "B" + r); if(!tn || !jn) continue;
+      const t = ns.teams.find(x => x.name === String(tn)), j = ns.judges.find(x => x.name === String(jn)); if(!t || !j) continue;
+      const sc = {}; ns.items.forEach((it, i) => { const v = val(ws, cols[i] + r); if(v != null && !isNaN(+v)) sc[it.id] = +v; });
+      if(Object.keys(sc).length){ ns.entries[slot][k(t.id, j.id)] = sc; counts[slot]++; }
+    }
+  });
+  const dw = sh("減点入力"); let nd = 0;
+  if(dw) for(let r = 2; r <= 300; r++){ const tn = val(dw, "A" + r), rn = val(dw, "B" + r); if(!tn || !rn) continue;
+    const t = ns.teams.find(x => x.name === String(tn)), rule = ns.rules.find(x => x.name === String(rn)); if(t && rule){ ns.deds.push({id:uid(), team:t.id, rule:rule.id}); nd++; } }
+  const hasB = counts.B > 0, hasC = counts.C > 0;
+  ns.checkers = hasC ? 3 : hasB ? 2 : S.checkers;
+  const msg = `チーム${ns.teams.length}・審査員${ns.judges.length}人・項目${ns.items.length}・減点${nd}件` + (counts.A ? `、点数（1人目${counts.A}件${hasB ? "・2人目" + counts.B + "件" : ""}${hasC ? "・3人目" + counts.C + "件" : ""}）` : "");
+  if(hasData() && !confirm(`Excelの内容で、いまのデータを置きかえますか？\n${msg}`)) return;
+  const und = snapshot();
+  ns.ui = {...S.ui, judge:null, part:null, slot:"A"};
+  S = ns; save(); render(); toast("読み込みました：" + msg, und);
+}
+
+/* ---------- 印刷 ---------- */
+function doPrint(){
+  const jid = $("#pJudge").value, pp = $("#pPart").value, per = S.perPage;
+  const js = jid ? S.judges.filter(j => j.id === jid) : S.judges;
+  const ps = pp ? [+pp] : parts();
+  const maxN = Math.max(...S.items.map(i => i.max));
+  let html = "";
+  js.forEach(j => ps.forEach(p => {
+    const ts = teamsOf(p); const pages = Math.ceil(ts.length / per);
+    for(let pg = 0; pg < pages; pg++){
+      const chunk = ts.slice(pg * per, pg * per + per);
+      html += `<section class="pg"><h1>${esc(S.title)}　第${p}部　　採点者： ${esc(j.name)}${pages > 1 ? `　（${pg + 1}/${pages}）` : ""}</h1>
+        <p>各項目について、該当する点数に〇をつけてください</p>
+        <table><colgroup><col style="width:27%"><col style="width:27%">${Array.from({length:maxN}, () => `<col>`).join("")}</colgroup>
+        <thead><tr><th>チーム名／演舞テーマ</th><th>審査項目</th><th colspan="${maxN}">点数</th></tr></thead><tbody>
+        ${chunk.map(t => S.items.map((it, i) => `<tr class="${i === 0 ? "first" : ""}">${i === 0 ? `<td class="nm" rowspan="${S.items.length}">${esc(t.name)}${t.theme ? `<span>${esc(t.theme)}</span>` : ""}</td>` : ""}
+          <td class="it">${esc(it.name)}${it.mult > 1 ? "　×" + it.mult : ""}</td>${Array.from({length:maxN}, (_, n) => `<td>${n < it.max ? n + 1 : ""}</td>`).join("")}</tr>`).join("")).join("")}
+        </tbody></table></section>`;
+    }
+  }));
+  $("#print").innerHTML = html;
+  window.print();
+}
+
+/* ---------- 結果の保存 ---------- */
+function downloadCSV(){
+  const rs = results();
+  const head = ["順位", "部", "チーム名", "審査員合計", "減点", "総合点", "個性点", ...S.judges.map(j => j.name)];
+  const lines = [head, ...rs.map(r => [r.rank, r.t.part, r.t.name, r.sum, r.ded, r.total, r.tie, ...r.per.map(p => p.sum)])];
+  const csv = "﻿" + lines.map(l => l.map(v => { const s = String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(",")).join("\r\n");
+  const blob = new Blob([csv], {type:"text/csv"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${S.title || "審査"}_結果.csv`; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+/* ---------- 発表 ---------- */
+function startShow(){
+  const rs = results().filter(r => r.rank <= 3).sort((a, b) => b.rank - a.rank);
+  if(!rs.length) return;
+  let step = -1;
+  const d = document.createElement("div"); d.className = "show"; d.setAttribute("role", "dialog"); d.setAttribute("aria-label", "結果発表");
+  const draw = () => {
+    const cur = rs[step];
+    d.innerHTML = `<button class="x">閉じる</button>
+      <div class="stage">${step < 0 ? `<div class="place">${esc(S.title || "結果発表")}</div><div class="pt">ボタンを押すと、3位から順に出ます</div>`
+        : `<div class="place p${cur.rank}">第${cur.rank}位</div><div class="team">${esc(cur.t.name)}</div><div class="pt">${cur.total}点</div>`}</div>
+      ${step < rs.length - 1 ? `<button class="next">${step < 0 ? "第" + rs[0].rank + "位を発表" : "第" + rs[step + 1].rank + "位を発表"}</button>` : `<div class="tap">おめでとうございます</div>`}`;
+    d.querySelector(".x").onclick = () => d.remove();
+    d.querySelector(".next")?.addEventListener("click", () => { step++; draw(); });
+  };
+  draw(); document.body.appendChild(d);
+}
+
+/* ---------- サンプル ---------- */
+function sample(){
+  const s = blank();
+  s.title = "サンプル大会";
+  const names = [["チーム 朱雀", 1, "炎の舞"], ["よさこい連 波", 1, "海と生きる"], ["踊り子集団 風", 1, "春を呼ぶ"], ["チーム 月光", 2, "夜明け"], ["鳴子組 桜", 2, "咲き誇れ"], ["大学連 雷", 2, "一瞬の光"]];
+  s.teams = names.map(([name, part, theme]) => ({id:uid(), name, part, theme}));
+  s.judges = ["審査員 1", "審査員 2", "審査員 3"].map(name => ({id:uid(), name}));
+  let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  s.teams.forEach((t, ti) => s.judges.forEach(j => {
+    const sc = {}; s.items.forEach(it => { sc[it.id] = Math.max(1, Math.min(10, Math.round(5 + rnd() * 4 + (ti === 4 ? 1 : 0)))); });
+    SLOTS.forEach(sl => { s.entries[sl][k(t.id, j.id)] = {...sc}; });
+  }));
+  // わざと1か所だけ打ち間違い
+  const key = k(s.teams[1].id, s.judges[0].id); s.entries.B[key] = {...s.entries.B[key], [s.items[2].id]: 3};
+  s.deds.push({id:uid(), team:s.teams[3].id, rule:s.rules[0].id});
+  s.ui = {...S.ui, judge:null, part:null, slot:"A", tab:"input"};
+  return s;
+}
+
+render();
+if("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js");
+</script>
+</body>
+</html>

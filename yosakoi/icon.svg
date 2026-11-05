@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#B5352A"/>
+  <!-- 鳴子 -->
+  <g transform="rotate(-18 256 250)">
+    <rect x="236" y="300" width="40" height="150" rx="16" fill="#F7E1DC"/>
+    <rect x="146" y="96" width="220" height="220" rx="44" fill="#FFF7EE"/>
+    <rect x="178" y="128" width="40" height="156" rx="14" fill="#E7B23A"/>
+    <rect x="236" y="128" width="40" height="156" rx="14" fill="#E7B23A"/>
+    <rect x="294" y="128" width="40" height="156" rx="14" fill="#E7B23A"/>
+  </g>
+  <!-- 星 -->
+  <path d="M404 312l15 31 34 5-25 24 6 34-30-16-30 16 6-34-25-24 34-5z" fill="#FFF7EE"/>
+</svg>
