@@ -147,6 +147,8 @@ button.chip{font:inherit;font-size:.72rem;text-align:left;width:100%;cursor:poin
 .lday-h{font-size:1rem}
 .link{border:0;background:none;padding:0;font:inherit;font-weight:700;color:inherit;cursor:pointer;text-align:left}
 .lday-h.is-today .link{color:var(--accent)}
+.hint .link{color:var(--accent);text-decoration:underline;font-weight:600}
+.steps{margin:0;padding-left:1.4em;display:grid;gap:6px;line-height:1.55;font-size:.92rem}
 .item .body{flex:1;min-width:0;display:grid}
 .map{display:block;padding:0 12px 10px;font-size:.88rem;color:var(--accent);overflow-wrap:anywhere}
 .toast-undo{margin-left:14px;border:0;background:none;color:inherit;font-weight:700;text-decoration:underline;padding:4px;min-height:32px;cursor:pointer}
@@ -704,6 +706,14 @@ function renderColors(){
       ${renderImport()}
       ${state.events.some(e=>e.ics)?`<div class="row"><button type="button" class="small" data-act="impclear">移した予定をまとめて消す（${state.events.filter(e=>e.ics).length}件）</button></div><p class="hint">移し方をまちがえたときは、まとめて消してからもう一度移せます。自分で入れた予定は消えません。</p>`:""}
     </details>
+    <details class="more-box"><summary>iPhoneのホーム画面に今日の予定を出す</summary>
+      <p class="note">このアプリの予定をiPhoneの「カレンダー」に書き出すと、カレンダーのウィジェットで、その日の予定をホーム画面に出せます。</p>
+      <ol class="steps"><li>下のボタンを押し、「すべて追加」でiPhoneのカレンダーに入れます（新しいカレンダー「スケジュール」を作って入れると、あとで消しやすくなります）。</li><li>ホーム画面の何もない所を長押しし、「編集」→「ウィジェットを追加」（または左上の「＋」）から「カレンダー」を選んで置きます。</li></ol>
+      <div class="row"><label for="ics-range" class="lbl">書き出す日</label><select id="ics-range"><option value="14">今日から2週間</option><option value="31" selected>今日から1か月</option><option value="92">今日から3か月</option></select></div>
+      <div class="row"><button type="button" class="btn" data-act="icsout">iPhoneのカレンダーに書き出す</button></div>
+      <p class="hint">自動ではつながりません。予定を変えたら、もう一度書き出してください。同じ予定が2つ並んでしまったら、iPhoneのカレンダーで「スケジュール」カレンダーを消してから入れ直します。</p>
+      <p class="hint">「すべて追加」の画面が出ないときは <button type="button" class="link" data-act="icsfile">ファイルとして保存</button> し、「ファイル」アプリから開いてください。</p>
+    </details>
   </section></div>`;
 }
 
@@ -931,6 +941,28 @@ function rrExpand(rr,start,until,limit){
   return out;
 }
 // 読み込んだ予定を、このアプリの予定の形にする（くり返しは、できるだけ「くり返し予定」のまま）
+// iPhoneなどのカレンダーへ書き出す：今日から days 日分の予定を1回ずつの予定にして .ics にする
+function toIcs(days){
+  const pad=n=>String(n).padStart(2,"0"), tx=v=>String(v||"").replace(/\\/g,"\\\\").replace(/;/g,"\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n");
+  const dd=k=>k.replace(/-/g,""), enc=new TextEncoder();
+  // 1行75バイトまでのきまりに合わせて折り返す
+  const fold=line=>{let out="",cur="",b=0;for(const ch of line){const n=enc.encode(ch).length;if(b+n>73){out+=cur+"\r\n ";cur="";b=0;}cur+=ch;b+=n;}return out+cur;};
+  const stamp=new Date().toISOString().replace(/[-:]/g,"").slice(0,15)+"Z";
+  const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//schedule//JA","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:スケジュール"];
+  const seen=new Set(); let n=0;
+  for(let i=0;i<days;i++) occurrencesOn(addDays(TODAY,i)).forEach(o=>{
+    const id=o.id+"-"+o.occ; if(seen.has(id)||(o.type==="task"&&o.done)) return; seen.add(id); n++;
+    const v=["BEGIN:VEVENT","UID:"+id+"@schedule","DTSTAMP:"+stamp,"SUMMARY:"+tx((o.type==="task"?"○":"")+(isNoTimeShift(o)?WARN:"")+(o.title||"（名前なし）"))];
+    if(o.allDay||!o.start) v.push("DTSTART;VALUE=DATE:"+dd(o.occ),"DTEND;VALUE=DATE:"+dd(addDays(o.endDate||o.occ,1)));
+    else{ const a=toMin(o.start); let e=o.type==="task"?a+30:toMin(o.end||o.start); if(e<=a) e+=1440;
+      v.push("DTSTART:"+dd(o.occ)+"T"+o.start.replace(":","")+"00","DTEND:"+dd(addDays(o.occ,Math.floor(e/1440)))+"T"+pad(Math.floor(e%1440/60))+pad(e%60)+"00"); }
+    if(o.place) v.push("LOCATION:"+tx(o.place)); if(o.memo) v.push("DESCRIPTION:"+tx(o.memo));
+    const c=catOf(o.cat); if(c&&c.name) v.push("CATEGORIES:"+tx(c.name));
+    v.push("END:VEVENT"); L.push(...v);
+  });
+  L.push("END:VCALENDAR");
+  return {text:L.map(fold).join("\r\n")+"\r\n",n};
+}
 function icsToEvents(cal,range){
   const cut=range==="all"?"0000-00-00":range==="now"?TODAY:addDays(TODAY,-365), horizon=addDays(TODAY,730);
   const byUid={}; cal.evs.forEach(v=>{const u=(v.UID&&v.UID.v)||Math.random().toString(36); (byUid[u]=byUid[u]||[]).push(v);});
@@ -1109,6 +1141,15 @@ document.addEventListener("click",ev=>{
       const c=catOf(d.cat)||state.cats[0];
       r.forEach(x=>state.events.push({id:nid(),type:"event",date:x.date,title:d.title.trim()||c.name||"予定",cat:c.id,allDay:false,start:x.start,end:x.end,color:d.color,done:false}));
       state.year=d.my; state.month=d.mm; state.draft=null; go("cal"); toast(`${r.length}件の予定を入れました`); break;
+    }
+    case "icsout": case "icsfile": {
+      const {text,n}=toIcs(+(($("#ics-range")||{}).value)||31); if(!n){toast("書き出す予定がありません");break;}
+      const url=URL.createObjectURL(new Blob([text],{type:"text/calendar;charset=utf-8"})), a=document.createElement("a"); a.href=url;
+      // iPhone・iPad は開くとカレンダーの「すべて追加」の画面になる。それ以外（と「ファイルとして保存」）はファイルで保存
+      const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+      if(D.act==="icsfile"||!ios) a.download=`schedule-${TODAY}.ics`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),60000);
+      toast(`${n}件の予定を書き出しました`); break;
     }
     case "export": {
       const blob=new Blob([JSON.stringify({v:1,app:"irodori-shift",cats:state.cats,events:state.events,showTake:state.showTake,uid},null,1)],{type:"application/json"});
