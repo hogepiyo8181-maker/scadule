@@ -47,7 +47,7 @@ html[data-fs="xl"]{font-size:125%}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:1rem;line-height:1.6;
+body{margin:0;overflow-x:hidden;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:1rem;line-height:1.6;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 96px}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 .wrap{max-width:820px;margin:0 auto;display:grid;gap:14px}
@@ -57,14 +57,6 @@ button{cursor:pointer}
 :focus-visible{outline:3px solid var(--sel-line);outline-offset:2px}
 .num{font-variant-numeric:tabular-nums}
 
-.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
-.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.brand h1{font-size:1.35rem}
-.proto{font-size:.78rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 10px}
-.tabs{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;gap:4px;width:100%}
-.tabs button{flex:1;border:0;background:none;padding:8px 10px;border-radius:999px;font-weight:700;white-space:nowrap}
-.tabs button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
-@media (min-width:640px){.tabs{width:auto}.tabs button{flex:none;padding:8px 18px}}
 
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 16px;font-weight:700;min-height:44px}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
@@ -83,12 +75,36 @@ button{cursor:pointer}
 .mhead .nav{display:flex;align-items:center;gap:6px;min-width:0}
 .mhead h2{font-size:clamp(1.2rem,5.4vw,1.6rem);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .mhead .btn{white-space:nowrap;flex:none}
+.chead .nav{gap:0}
+.chead .tools{gap:6px;flex-wrap:nowrap;flex:none}
+.icon-btn.plain{border:0;background:none;width:36px;font-size:1.6rem;color:var(--muted)}
+.today-btn{font-size:.85rem;font-weight:700;width:auto;min-width:44px;padding:0 10px;border-radius:999px}
+.mtitle{display:grid;line-height:1.05;text-align:center;min-width:0}
+.mtitle small{font-size:.72rem;font-weight:700;color:var(--muted);font-family:var(--f-body)}
+.mtitle span{font-size:1.7rem;white-space:nowrap}
+.mtitle.long span{font-size:1.15rem}
+.menu{display:grid;gap:10px}
+.menu-row{display:flex;align-items:center;gap:14px;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:16px;min-height:72px}
+.menu-row .mi{width:40px;height:40px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:1.2rem;flex:none}
+.menu-row .mi.dots{display:flex;flex-wrap:wrap;justify-content:center;align-content:center;gap:3px;padding:6px;background:var(--bg)}
+.menu-row .mi.dots .dot{width:9px;height:9px}
+.menu-row .mt{flex:1;min-width:0;display:grid;gap:2px}
+.menu-row .mt b{font-size:1.1rem;font-family:var(--f-display)}
+.menu-row .mt small{font-size:.85rem;color:var(--muted)}
+.menu-row .chev{font-size:1.5rem;color:var(--muted)}
+.swipe{touch-action:pan-y}
+@keyframes inR{from{transform:translateX(48px);opacity:.25}to{transform:none;opacity:1}}
+@keyframes inL{from{transform:translateX(-48px);opacity:.25}to{transform:none;opacity:1}}
+.swipe.in-r{animation:inR .2s ease-out} .swipe.in-l{animation:inL .2s ease-out}
+@media (prefers-reduced-motion:reduce){.swipe.in-r,.swipe.in-l{animation:none}}
 
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .dow,.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .dow div{text-align:center;font-size:.85rem;font-weight:700;padding:6px 0;color:var(--muted);border-bottom:1px solid var(--line)}
 .dow div:first-child{color:var(--sun)} .dow div:last-child{color:var(--sat)}
-.day{border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--surface);min-height:104px;padding:4px 3px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
+.grid{grid-auto-rows:var(--cellh,104px)}
+.day>*{flex:none}
+.day{border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--surface);min-height:0;overflow:hidden;padding:4px 3px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
 .day:nth-child(7n){border-right:0}
 .day.out{background:var(--bg);color:var(--muted)}
 .day.out .dnum{opacity:.55}
@@ -96,15 +112,16 @@ button{cursor:pointer}
 .day.sun .dnum,.day.hol .dnum{color:var(--sun)} .day.sat .dnum{color:var(--sat)}
 .day.today .dnum{background:var(--today);color:var(--accent-ink)}
 .hname{font-size:.66rem;color:var(--sun);line-height:1.2;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.chip{display:block;font-size:.72rem;line-height:1.3;padding:1px 4px;border-radius:4px;background:var(--cs);border-left:3px solid var(--cc);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ink)}
+.chip{display:block;flex:none;font-size:.72rem;line-height:1.35;padding:1px 4px;border-radius:4px;background:var(--cs);border-left:3px solid var(--cc);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ink)}
 .chip.full{background:var(--cc);color:#fff;border-left:0}
 .chip.task{background:none;border:1px solid var(--cc)}
 .chip.done{opacity:.55;text-decoration:line-through}
 .chip .tt{font-variant-numeric:tabular-nums}
-.more{font-size:.68rem;color:var(--muted);text-align:center}
+.more{font-size:.72rem;font-weight:700;color:var(--muted);text-align:center;line-height:1.2;flex:none}
 @media (max-width:560px){
   .cal{margin-inline:-16px;border-radius:0;border-left:0;border-right:0}
-  .day{min-height:88px;padding:3px 1px}
+  .grid{grid-auto-rows:var(--cellh,88px)}
+  .day{padding:3px 1px}
   .chip{font-size:.72rem;padding:0 2px;letter-spacing:-.03em}
   .grid .chip{text-overflow:clip}
 }
@@ -118,6 +135,7 @@ button{cursor:pointer}
 .chip.full.cont-l{border-top-left-radius:0;border-bottom-left-radius:0;margin-left:-3px}
 .chip.full.cont-r{border-top-right-radius:0;border-bottom-right-radius:0;margin-right:-3px}
 button.chip{font:inherit;font-size:.72rem;text-align:left;width:100%;cursor:pointer;display:block}
+button.chip.full{border:0}
 .drag-ghost{position:fixed;z-index:30;pointer-events:none;transform:translate(-50%,-120%);background:var(--cc);color:#fff;border-radius:8px;padding:6px 10px;font-weight:700;font-size:.85rem;box-shadow:0 6px 18px rgba(0,0,0,.25);max-width:60vw;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .tl-head,.tl-all,.tl-grid{display:grid}
 .tl-head{border-bottom:1px solid var(--line)}
@@ -267,14 +285,6 @@ details.card>summary{cursor:pointer;font-weight:700}
 <body>
 
 <div class="wrap">
-  <header class="top" id="top">
-    <div class="brand"><h1>スケジュール</h1></div>
-    <nav class="tabs" aria-label="画面の切り替え">
-      <button type="button" id="tab-cal" data-view="cal" aria-pressed="true">カレンダー</button>
-      <button type="button" id="tab-pay" data-view="pay" aria-pressed="false">給料</button>
-      <button type="button" id="tab-set" data-view="colors" aria-pressed="false">色と種類</button>
-    </nav>
-  </header>
   <main id="view"></main>
 </div>
 <button type="button" class="fab" id="fab" data-act="new" aria-label="予定を入れる"><b aria-hidden="true">＋</b>予定を入れる</button>
@@ -464,11 +474,13 @@ function chip(o,k){
   // 月のカレンダーでは時間ではなく名前を出す（時間は日付をタップした画面で見られる）
   return `<span class="chip" style="${c}" ${da} title="${st(o.start)}-${st(o.end)} ${esc(o.title)}">${esc(o.title)||"（名前なし）"}</span>`;
 }
+const GEAR=`<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>`;
 function calHead(mode){
-  const k=state.sel, ws=addDays(k,-new Date(k+"T00:00").getDay());
-  const title=mode==="month"?`${state.year}年${state.month+1}月`:mode==="week"?`${md(ws)}〜${md(addDays(ws,6))}`:mode==="day"?jdate(k):`${md(k)}から`;
-  return `<div class="mhead"><div class="nav"><button class="icon-btn" type="button" data-act="prev" aria-label="前へ">‹</button><h2 class="num">${title}</h2><button class="icon-btn" type="button" data-act="next" aria-label="次へ">›</button></div>
-    <div class="row" style="gap:6px;flex-wrap:nowrap"><button class="icon-btn" type="button" data-view="search" aria-label="予定を探す"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button><button class="btn" type="button" data-act="today">今日</button></div></div>
+  const k=state.sel, ws=addDays(k,-new Date(k+"T00:00").getDay()), dk=new Date(k+"T00:00");
+  const yr=mode==="month"?state.year:new Date((mode==="week"?ws:k)+"T00:00").getFullYear();
+  const main=mode==="month"?`${state.month+1}月`:mode==="week"?`${md(ws)}〜${md(addDays(ws,6))}`:mode==="day"?`${dk.getMonth()+1}月${dk.getDate()}日`:`${md(k)}から`;
+  return `<div class="mhead chead"><div class="nav"><button class="icon-btn plain" type="button" data-act="prev" aria-label="前へ">‹</button><h2 class="num mtitle${mode==="month"?"":" long"}"><small>${yr}年</small><span>${main}</span></h2><button class="icon-btn plain" type="button" data-act="next" aria-label="次へ">›</button></div>
+    <div class="row tools"><button class="icon-btn" type="button" data-view="search" aria-label="予定を探す"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button><button class="icon-btn today-btn" type="button" data-act="today">今日</button><button class="icon-btn" type="button" id="btn-set" data-view="set" aria-label="設定（給料・色と種類）">${GEAR}</button></div></div>
   <div class="seg modes" role="group" aria-label="表示のしかた">${[["month","月"],["week","週"],["day","日"],["list","一覧"]].map(([v,l])=>`<button type="button" data-mode="${v}" aria-pressed="${mode===v}">${l}</button>`).join("")}</div>`;
 }
 function renderCal(){
@@ -491,14 +503,14 @@ function renderMonth(){
     const cls=["day",out?"out":"",w===0?"sun":"",w===6?"sat":"",hol?"hol":"",k===TODAY?"today":""].join(" ");
     cells.push(`<button type="button" class="${cls}" data-day="${k}" aria-label="${jdate(k)}${hol?" "+hol:""}、${evs.length}件">
       <span class="dnum num">${d.getDate()}</span>${hol&&!out?`<span class="hname">${hol}</span>`:""}
-      ${evs.slice(0,3).map(o=>chip(o,k)).join("")}${evs.length>3?`<span class="more">+${evs.length-3}</span>`:""}</button>`);
+      ${evs.slice(0,12).map(o=>chip(o,k)).join("")}<span class="more" hidden></span></button>`);
   }
-  return `<section class="cal" aria-label="月のカレンダー">
+  return `<section class="cal swipe" aria-label="月のカレンダー">
     <div class="dow">${WD.map(w=>`<div>${w}</div>`).join("")}</div>
     <div class="grid">${cells.join("")}</div>
     <div class="legend">${state.cats.map(c=>`<span style="${cv(c.color)}"><i class="dot"></i>${esc(c.name||"名前なし")}</span>`).join("")}<button type="button" class="small" data-view="colors">色を変える</button></div>
   </section>
-  <p class="hint">日付をタップするとその日の予定が見られます。予定を長押しすると別の日に移せます。${state.events.length?"":"<br>はじめに「色と種類」で色の意味を、「給料」で時給を決めておくと便利です。"}</p>`;
+  <p class="hint">左右にスライドすると前後の月に移れます。日付をタップするとその日の予定が時間つきで見られます。予定を長押しすると別の日に移せます。${state.events.length?"":"<br>はじめに右上の歯車（設定）から、「色と種類」で色の意味を、「給料」で時給を決めておくと便利です。"}</p>`;
 }
 const HOUR=44;
 function segsFor(k){
@@ -517,8 +529,8 @@ function renderTimeline(days){
   const hours=Array.from({length:24},(_,h)=>`<span class="tl-h" style="top:${h*HOUR}px">${h?h+":00":""}</span>`).join("");
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const colsHtml=days.map(k=>`<div class="tl-col" data-slot="${k}">${segsFor(k).map(g=>`<button type="button" class="tl-ev${g.o.type==="task"?" task":""}${g.o.done?" done":""}${(g.e-g.s)<50?" short":""}" style="${cv(colorOf(g.o))};top:${g.s/60*HOUR}px;height:${Math.max(20,(g.e-g.s)/60*HOUR-2)}px;left:calc(${g.lane/g.n*100}% + 1px);width:calc(${100/g.n}% - 2px)" data-open="${g.o.id}" data-occ="${g.o.occ}"><b>${g.o.type==="task"?(g.o.done?"✓":"○"):""}${esc(g.o.title)}</b><span>${g.cont?"〜"+st(g.o.end):st(g.o.start)+(g.o.type==="task"?"":"-"+st(g.o.end))}</span></button>`).join("")}${k===TODAY?`<i class="tl-now" style="top:${nowMin/60*HOUR}px"></i>`:""}</div>`).join("");
-  return `<section class="cal" aria-label="時間ごとの予定">${head}${adRow}<div class="tl-body" id="tl-body"><div class="tl-grid" style="grid-template-columns:${cols};height:${24*HOUR}px"><div class="tl-gut">${hours}</div>${colsHtml}</div></div></section>
-  <p class="hint">空いている時間をタップすると、その時間から予定を入れられます。上の日付をタップすると、その日だけの表示になります。</p>`;
+  return `<section class="cal swipe" aria-label="時間ごとの予定">${head}${adRow}<div class="tl-body" id="tl-body"><div class="tl-grid" style="grid-template-columns:${cols};height:${24*HOUR}px"><div class="tl-gut">${hours}</div>${colsHtml}</div></div></section>
+  <p class="hint">空いている時間をタップすると、その時間から予定を入れられます。上の日付をタップすると、その日だけの表示になります。左右にスライドすると前後に移れます。</p>`;
 }
 function renderList(){
   const days=60*(state.listMore||1); let html="";
@@ -618,9 +630,20 @@ function renderEdit(){
   </div>`;
 }
 
+function renderSet(){
+  const t=state.cats.some(c=>c.pay)?monthTotals():null;
+  const dots=state.cats.slice(0,6).map(c=>`<i class="dot" style="${cv(c.color)}"></i>`).join("");
+  return `<div style="display:grid;gap:14px">
+  <div class="sbar"><button class="btn ghost" type="button" data-view="cal">‹ 戻る</button><h2>設定</h2><span style="width:44px"></span></div>
+  <nav class="menu" aria-label="設定">
+    <button type="button" class="menu-row" id="go-pay" data-view="pay"><span class="mi" aria-hidden="true">¥</span><span class="mt"><b>給料</b><small>${t?`${state.month+1}月の見込み ${yen(t.pay)}・時給の設定`:"時給や計算のしかたを決める"}</small></span><span class="chev" aria-hidden="true">›</span></button>
+    <button type="button" class="menu-row" id="go-colors" data-view="colors"><span class="mi dots" aria-hidden="true">${dots}</span><span class="mt"><b>色と種類</b><small>色の意味・文字の大きさ・データの保存</small></span><span class="chev" aria-hidden="true">›</span></button>
+  </nav></div>`;
+}
+const backBar=title=>`<div class="sbar"><button class="btn ghost" type="button" data-view="${state.from==="cal"?"cal":"set"}">‹ 戻る</button><h2>${title}</h2><span style="width:44px"></span></div>`;
 function renderPay(){
   const t=monthTotals();
-  return `<div style="display:grid;gap:14px">${monthHead()}
+  return `<div style="display:grid;gap:14px">${backBar("給料")}${monthHead()}
   <section class="card" id="pay-sum">${paySummary(t)}</section>
   ${noTimeCard()}
   <section class="card"><h3>この月の勤務</h3><div id="pay-list" style="display:grid;gap:10px">${payList(monthShifts())}</div></section>
@@ -683,7 +706,7 @@ function wageCard(w){
 }
 
 function renderColors(){
-  return `<div style="display:grid;gap:14px">
+  return `<div style="display:grid;gap:14px">${backBar("色と種類")}
   <section class="card"><h3>文字の大きさ</h3>
     <div class="seg" role="group" aria-label="文字の大きさ" style="margin-top:10px">${[["m","標準"],["l","大きめ"],["xl","特大"]].map(([v,l])=>`<button type="button" data-fs="${v}" aria-pressed="${(state.fs||"m")===v}">${l}</button>`).join("")}</div>
     <p class="note">カレンダーや予定の文字が、すべてこの大きさになります。</p></section>
@@ -721,10 +744,9 @@ function render(){
   save();
   document.documentElement.dataset.fs=state.fs||"m";
   const v=state.view;
-  document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.view===(v==="day"||v==="edit"||v==="search"?"cal":v)));
-  $("#top").hidden=v==="edit"||v==="search";
   $("#fab").hidden=v!=="cal";
-  $("#view").innerHTML=v==="cal"?renderCal():v==="day"?renderDay():v==="edit"?renderEdit():v==="search"?renderSearch():v==="pay"?renderPay():renderColors();
+  $("#view").innerHTML=v==="cal"?renderCal():v==="day"?renderDay():v==="edit"?renderEdit():v==="search"?renderSearch():v==="set"?renderSet():v==="pay"?renderPay():renderColors();
+  if(v==="cal"&&(state.calMode||"month")==="month") fitMonth();
   if(v==="edit") updatePreview();
   const tb=$("#tl-body"); if(tb){ tb.scrollTop=state.tlScroll!=null?state.tlScroll:7*HOUR-8; tb.addEventListener("scroll",()=>{state.tlScroll=tb.scrollTop;},{passive:true}); }
 }
@@ -831,6 +853,54 @@ function mvEnd(e){
   if(mv.active){ mv.ghost&&mv.ghost.remove(); if(e&&e.type==="touchend"&&e.cancelable) e.preventDefault(); else suppressClick=Date.now(); const {id,occ,target}=mv; mv=null; if(target&&target!==occ) moveEvent(id,occ,target); else render(); return; }
   mv=null;
 }
+function stepCal(dir){
+  const mode=state.view==="cal"?(state.calMode||"month"):"month";
+  if(mode==="month"){ state.month+=dir; if(state.month<0){state.month=11;state.year--;} if(state.month>11){state.month=0;state.year++;} }
+  else { state.sel=addDays(state.sel,dir*(mode==="week"?7:mode==="day"?1:30)); const x=new Date(state.sel+"T00:00"); state.year=x.getFullYear(); state.month=x.getMonth(); state.listMore=1; }
+}
+// 月のカレンダーを画面の高さいっぱいに広げ、マスに入りきらない予定は「+N」にまとめる
+function fitMonth(){
+  const g=$(".grid"); if(!g) return;
+  const rows=Math.ceil(g.children.length/7), fab=$("#fab"), top=g.getBoundingClientRect().top+window.scrollY;
+  const room=window.innerHeight-top-(fab&&!fab.hidden?fab.offsetHeight+36:16);
+  g.style.setProperty("--cellh",Math.max(88,Math.floor(room/rows))+"px");
+  g.querySelectorAll(".day").forEach(d=>{
+    const chips=[...d.querySelectorAll(".chip")], more=d.querySelector(".more"); if(!chips.length||!more) return;
+    chips.forEach(c=>c.hidden=false); more.hidden=true;
+    const lim=d.getBoundingClientRect().bottom-1, low=el=>!el.hidden&&el.getBoundingClientRect().bottom>lim;
+    if(!chips.some(low)) return;
+    more.textContent="+9"; more.hidden=false; let n=0;
+    for(let i=chips.length-1;i>0&&(low(more)||chips.some(low));i--){chips[i].hidden=true;n++;}
+    more.textContent="+"+n; more.setAttribute("aria-label",`ほか${n}件`);
+  });
+}
+let fitT; window.addEventListener("resize",()=>{clearTimeout(fitT);fitT=setTimeout(()=>{if(state.view==="cal"&&(state.calMode||"month")==="month") fitMonth();},120);});
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{if(state.view==="cal"&&(state.calMode||"month")==="month") fitMonth();});
+
+/* ---------- swipe left/right on the calendar to go to the next/previous month (week, day) ---------- */
+let swp=null;
+const reduceMotion=()=>window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+document.addEventListener("touchstart",e=>{
+  swp=null; if(state.view!=="cal"||e.touches.length!==1||(state.calMode||"month")==="list") return;
+  const box=e.target.closest&&e.target.closest(".swipe"); if(!box) return;
+  const t=e.touches[0]; swp={x:t.clientX,y:t.clientY,box,dx:0,on:false,t:Date.now()};
+},{passive:true});
+document.addEventListener("touchmove",e=>{
+  if(!swp) return; if(mv&&mv.active){swp.box.style.transform="";swp=null;return;}
+  const t=e.touches[0], dx=t.clientX-swp.x, dy=t.clientY-swp.y;
+  if(!swp.on){ if(Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.3) swp.on=true; else { if(Math.abs(dy)>12) swp=null; return; } }
+  swp.dx=dx; swp.box.style.transition="none"; swp.box.style.transform=`translateX(${dx}px)`; if(e.cancelable) e.preventDefault();
+},{passive:false});
+function swipeEnd(e){
+  if(!swp) return; const s=swp; swp=null; if(!s.on) return;
+  if(e&&e.cancelable) e.preventDefault();
+  const w=s.box.offsetWidth||320, go2=e&&e.type==="touchend"&&(Math.abs(s.dx)>w*.22||(Math.abs(s.dx)>40&&Date.now()-s.t<300));
+  if(!go2){ s.box.style.transition="transform .2s ease-out"; s.box.style.transform=""; return; }
+  const dir=s.dx<0?1:-1, done=()=>{ stepCal(dir); render(); const b=$(".swipe"); if(b&&!reduceMotion()) b.classList.add(dir>0?"in-r":"in-l"); };
+  if(reduceMotion()){ done(); return; }
+  s.box.style.transition="transform .14s ease-in"; s.box.style.transform=`translateX(${dir>0?-w:w}px)`; setTimeout(done,140);
+}
+document.addEventListener("touchend",swipeEnd,{passive:false}); document.addEventListener("touchcancel",swipeEnd);
 function moveEvent(id,occ,k){
   const ev=state.events.find(e=>e.id===id); if(!ev) return; const snap=JSON.stringify(state.events); const L=spanOf(ev);
   if(isRep(ev)){ ev.skip=[...(ev.skip||[]),occ]; state.events.push(Object.assign({},ev,{id:nid(),date:k,endDate:L?addDays(k,L):"",repeat:null,skip:[],doneOn:[],done:(ev.doneOn||[]).includes(occ)})); }
@@ -1072,7 +1142,7 @@ document.addEventListener("click",ev=>{
     state.sel=col.dataset.slot; openEdit(col.dataset.slot,null,null,{start:tm(min),end:tm(min+60)}); return;
   }
   const b=ev.target.closest("button"); if(!b) return; const D=b.dataset, d=state.draft;
-  if(D.view){ if(D.view==="search") state.back="cal"; go(D.view); if(D.view==="search"){const q=$("#q"); q&&q.focus();} return;}
+  if(D.view){ if(D.view==="search") state.back="cal"; if((D.view==="pay"||D.view==="colors")&&(state.view==="cal"||state.view==="set")) state.from=state.view; go(D.view); if(D.view==="search"){const q=$("#q"); q&&q.focus();} return;}
   if(D.fs){state.fs=D.fs;rerenderKeep();toast("文字の大きさを変えました");return;}
   if(D.mode){
     const m=D.mode; const inMonth=state.sel.startsWith(`${state.year}-${pad(state.month+1)}`);
@@ -1106,12 +1176,7 @@ document.addEventListener("click",ev=>{
     state.events.forEach(e=>{if(e.cat===id)e.cat=state.cats[0].id;}); rerenderKeep(); toast("種類を消しました（その予定は先頭の種類に移しました）"); return;
   }
   switch(D.act){
-    case "prev": case "next": {
-      const dir=D.act==="prev"?-1:1, mode=state.view==="cal"?(state.calMode||"month"):"month";
-      if(mode==="month"){ state.month+=dir; if(state.month<0){state.month=11;state.year--;} if(state.month>11){state.month=0;state.year++;} }
-      else { state.sel=addDays(state.sel,dir*(mode==="week"?7:mode==="day"?1:30)); const x=new Date(state.sel+"T00:00"); state.year=x.getFullYear(); state.month=x.getMonth(); state.listMore=1; }
-      render(); break;
-    }
+    case "prev": case "next": stepCal(D.act==="prev"?-1:1); render(); break;
     case "impgo": {
       if(!state.imp) break; const r=impBuild(), snap=JSON.stringify(state.events), tc=e=>r.catOfTitle[e.title]; let fixed=0;
       r.list.forEach(x=>x.evs.forEach(e=>state.events.push(Object.assign({id:nid(),done:false,skip:[],doneOn:[],color:""},e,{cat:tc(e)||x.c.cat}))));
