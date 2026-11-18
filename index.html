@@ -1316,7 +1316,14 @@ document.addEventListener("change",ev=>{
 });
 render();
 document.addEventListener("visibilitychange",()=>{if(document.hidden) return; const n=new Date(); const k=ds(n.getFullYear(),n.getMonth(),n.getDate()); if(k!==TODAY){TODAY=k; if(state.view==="cal") render();}});
-if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+// 新しい版を公開したら、次に開いたときにすぐ切り替わるようにする（予定を入力中は切り替えない）
+if("serviceWorker" in navigator && location.protocol==="https:"){
+  const hadSW=!!navigator.serviceWorker.controller; let reloaded=false;
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{ if(!hadSW||reloaded||state.view==="edit") return; reloaded=true; save(); location.reload(); });
+  navigator.serviceWorker.register("sw.js").then(reg=>{
+    document.addEventListener("visibilitychange",()=>{ if(!document.hidden) reg.update().catch(()=>{}); });
+  }).catch(()=>{});
+}
 })();
 </script>
 </body>
