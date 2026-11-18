@@ -95,7 +95,11 @@ button{cursor:pointer}
 .swipe{touch-action:pan-y;position:relative}
 .swipe.swiping{overflow:visible}
 .peek{position:absolute;top:0;width:100%;height:100%;overflow:hidden;background:var(--surface);pointer-events:none}
-.peek-prev{right:100%} .peek-next{left:100%}
+.peek-prev{right:calc(100% + 14px)} .peek-next{left:calc(100% + 14px)}
+.swipe.swiping::before,.swipe.swiping::after{content:"";position:absolute;top:0;bottom:0;width:4px;border-radius:2px;background:var(--accent);opacity:.85;pointer-events:none}
+.swipe.swiping::before{left:-9px} .swipe.swiping::after{right:-9px}
+.peek-label{position:absolute;z-index:2;top:6px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:.9rem;padding:2px 14px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.2);font-variant-numeric:tabular-nums}
+.peek-next .peek-label{left:10px;transform:none} .peek-prev .peek-label{left:auto;right:10px;transform:none} /* 切れ目のすぐ横に出して、少しずらしただけで読めるように */
 .swipe:not(.swiping)>.peek{visibility:hidden}
 
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
@@ -136,6 +140,7 @@ button{cursor:pointer}
 .chip.full.cont-r{border-top-right-radius:0;border-bottom-right-radius:0;margin-right:-3px}
 button.chip{font:inherit;font-size:.72rem;text-align:left;width:100%;cursor:pointer;display:block}
 button.chip.full{border:0}
+.chip.sp{visibility:hidden;pointer-events:none}
 .drag-ghost{position:fixed;z-index:30;pointer-events:none;transform:translate(-50%,-120%);background:var(--cc);color:#fff;border-radius:8px;padding:6px 10px;font-weight:700;font-size:.85rem;box-shadow:0 6px 18px rgba(0,0,0,.25);max-width:60vw;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .tl-head,.tl-all,.tl-grid{display:grid}
 .tl-head{border-bottom:1px solid var(--line)}
@@ -402,6 +407,21 @@ function occurrencesOn(k){
   }
   return out.sort(sortItems);
 }
+// 何日も続く終日の予定が、週の中で同じ段（レーン）に並ぶように順番を決める。null はすき間（見えない空きの段）
+function allDayLanes(keys){
+  const per=keys.map(k=>occurrencesOn(k)), spans=new Map(), laneOf=new Map(), busy=[], key=o=>o.id+"|"+o.occ;
+  per.forEach((list,i)=>list.forEach(o=>{ if(o.allDay&&o.multi){ const m=spans.get(key(o))||{k:key(o),first:i,last:i}; m.last=i; spans.set(m.k,m); } }));
+  [...spans.values()].sort((a,b)=>a.first-b.first||(b.last-b.first)-(a.last-a.first)).forEach(m=>{
+    let l=0; while((busy[l]=busy[l]||new Set()) && [...Array(m.last-m.first+1)].some((_,j)=>busy[l].has(m.first+j))) l++;
+    for(let i=m.first;i<=m.last;i++) busy[l].add(i); laneOf.set(m.k,l);
+  });
+  return per.map(list=>{
+    const rows=[], singles=[], rest=[];
+    list.forEach(o=>{ if(o.allDay&&o.multi) rows[laneOf.get(key(o))]=o; else if(o.allDay) singles.push(o); else rest.push(o); });
+    for(let l=0;l<rows.length;l++) if(!rows[l]) rows[l]=singles.length?singles.shift():null;
+    return [...rows,...singles,...rest];
+  });
+}
 const mkOcc=(e,c,off,L)=>Object.assign({},e,{occ:c,date:c,endDate:L?addDays(c,L):"",first:off===0,last:off===L,multi:L>0,done:isRep(e)?(e.doneOn||[]).includes(c):!!e.done});
 function repeatLabel(e){
   if(!isRep(e)) return ""; const d=new Date(e.date+"T00:00"); const r=e.repeat;
@@ -468,6 +488,7 @@ function monthTotals(){
 function monthHead(){
   return `<div class="mhead"><div class="nav"><button class="icon-btn" type="button" data-act="prev" aria-label="前の月">‹</button><h2 class="num">${state.year}年${state.month+1}月</h2><button class="icon-btn" type="button" data-act="next" aria-label="次の月">›</button></div><button class="btn" type="button" data-act="today">今日</button></div>`;
 }
+const SPACER=`<span class="chip sp" aria-hidden="true">&nbsp;</span>`;
 function chip(o,k){
   const c=cv(colorOf(o)), da=`data-ev="${o.id}" data-occ="${o.occ}"`;
   if(o.type==="task") return `<span class="chip task${o.done?" done":""}" style="${c}" ${da}>${o.done?"✓":"○"}${esc(o.title)}</span>`;
@@ -499,14 +520,21 @@ function renderMonth(){
   const y=state.year,m=state.month;
   const first=new Date(y,m,1).getDay(), dim=new Date(y,m+1,0).getDate();
   const total=Math.ceil((first+dim)/7)*7; const cells=[];
+  const keyAt=i=>{const d=new Date(y,m,1-first+i);return ds(d.getFullYear(),d.getMonth(),d.getDate());};
+  const lanes=[], holRow=[]; // holRow: 祝日の名前と何日も続く予定が同じ週にあるとき、帯がずれないように全部の日に名前の行をとる
+  for(let w=0;w<total;w+=7){
+    const ks=Array.from({length:7},(_,j)=>keyAt(w+j)), ls=allDayLanes(ks);
+    const need=ls.some(l=>l.some(o=>o&&o.allDay&&o.multi))&&ks.some(k=>holiday(k)&&new Date(k+"T00:00").getMonth()===m);
+    lanes.push(...ls); holRow.push(...ks.map(()=>need));
+  }
   for(let i=0;i<total;i++){
     const d=new Date(y,m,1-first+i); const k=ds(d.getFullYear(),d.getMonth(),d.getDate());
     const out=d.getMonth()!==m, w=d.getDay(), hol=holiday(k);
-    const evs=occurrencesOn(k);
+    const evs=lanes[i];
     const cls=["day",out?"out":"",w===0?"sun":"",w===6?"sat":"",hol?"hol":"",k===TODAY?"today":""].join(" ");
-    cells.push(`<button type="button" class="${cls}" data-day="${k}" aria-label="${jdate(k)}${hol?" "+hol:""}、${evs.length}件">
-      <span class="dnum num">${d.getDate()}</span>${hol&&!out?`<span class="hname">${hol}</span>`:""}
-      ${evs.slice(0,12).map(o=>chip(o,k)).join("")}<span class="more" hidden></span></button>`);
+    cells.push(`<button type="button" class="${cls}" data-day="${k}" aria-label="${jdate(k)}${hol?" "+hol:""}、${evs.filter(Boolean).length}件">
+      <span class="dnum num">${d.getDate()}</span>${hol&&!out?`<span class="hname">${hol}</span>`:holRow[i]?`<span class="hname" aria-hidden="true">&nbsp;</span>`:""}
+      ${evs.slice(0,12).map(o=>o?chip(o,k):SPACER).join("")}<span class="more" hidden></span></button>`);
   }
   return `<section class="cal swipe" aria-label="月のカレンダー">
     <div class="dow">${WD.map(w=>`<div>${w}</div>`).join("")}</div>
@@ -527,8 +555,8 @@ function segsFor(k){
 function renderTimeline(days){
   const cols=`44px repeat(${days.length},minmax(0,1fr))`;
   const head=`<div class="tl-head" style="grid-template-columns:${cols}"><span></span>${days.map(k=>{const d=new Date(k+"T00:00"),w=d.getDay();return `<button type="button" class="tl-dh${w===0||holiday(k)?" sun":""}${w===6&&!holiday(k)?" sat":""}" data-gotoday="${k}" aria-label="${jdate(k)}の予定を見る"><span>${WD[w]}</span><b class="${k===TODAY?"is-today":""}">${d.getDate()}</b></button>`}).join("")}</div>`;
-  const all=days.map(k=>occurrencesOn(k).filter(o=>o.allDay));
-  const adRow=all.some(a=>a.length)?`<div class="tl-all" style="grid-template-columns:${cols}"><span class="tl-lbl">終日</span>${all.map(list=>`<div class="tl-ac">${list.map(o=>`<button type="button" class="chip ${o.type==="task"?"task":"full"}${o.done?" done":""}" style="${cv(colorOf(o))}" data-open="${o.id}" data-occ="${o.occ}">${o.type==="task"?(o.done?"✓":"○"):isNoTimeShift(o)?WARN:""}${esc(o.title)}</button>`).join("")}</div>`).join("")}</div>`:"";
+  const all=allDayLanes(days).map(list=>list.filter(o=>!o||o.allDay));
+  const adRow=all.some(a=>a.some(Boolean))?`<div class="tl-all" style="grid-template-columns:${cols}"><span class="tl-lbl">終日</span>${all.map(list=>`<div class="tl-ac">${list.map(o=>!o?`<button type="button" class="chip full sp" tabindex="-1" aria-hidden="true">&nbsp;</button>`:`<button type="button" class="chip ${o.type==="task"?"task":"full"}${o.done?" done":""}" style="${cv(colorOf(o))}" data-open="${o.id}" data-occ="${o.occ}">${o.type==="task"?(o.done?"✓":"○"):isNoTimeShift(o)?WARN:""}${esc(o.title)}</button>`).join("")}</div>`).join("")}</div>`:"";
   const hours=Array.from({length:24},(_,h)=>`<span class="tl-h" style="top:${h*HOUR}px">${h?h+":00":""}</span>`).join("");
   const now=new Date(), nowMin=now.getHours()*60+now.getMinutes();
   const colsHtml=days.map(k=>`<div class="tl-col" data-slot="${k}">${segsFor(k).map(g=>`<button type="button" class="tl-ev${g.o.type==="task"?" task":""}${g.o.done?" done":""}${(g.e-g.s)<50?" short":""}" style="${cv(colorOf(g.o))};top:${g.s/60*HOUR}px;height:${Math.max(20,(g.e-g.s)/60*HOUR-2)}px;left:calc(${g.lane/g.n*100}% + 1px);width:calc(${100/g.n}% - 2px)" data-open="${g.o.id}" data-occ="${g.o.occ}"><b>${g.o.type==="task"?(g.o.done?"✓":"○"):""}${esc(g.o.title)}</b><span>${g.cont?"〜"+st(g.o.end):st(g.o.start)+(g.o.type==="task"?"":"-"+st(g.o.end))}</span></button>`).join("")}${k===TODAY?`<i class="tl-now" style="top:${nowMin/60*HOUR}px"></i>`:""}</div>`).join("");
@@ -903,7 +931,8 @@ function fitGrid(g,room){
     const lim=d.getBoundingClientRect().bottom-1, low=el=>!el.hidden&&el.getBoundingClientRect().bottom>lim;
     if(!chips.some(low)) return;
     more.textContent="+9"; more.hidden=false; let n=0;
-    for(let i=chips.length-1;i>0&&(low(more)||chips.some(low));i--){chips[i].hidden=true;n++;}
+    for(let i=chips.length-1;i>0&&(low(more)||chips.some(low));i--){chips[i].hidden=true;if(!chips[i].classList.contains("sp"))n++;}
+    for(let i=chips.length-1;i>=0;i--){ if(chips[i].hidden) continue; if(chips[i].classList.contains("sp")) chips[i].hidden=true; else break; } // 下に残ったすき間は消す
     more.textContent="+"+n; more.setAttribute("aria-label",`ほか${n}件`);
   });
 }
@@ -917,9 +946,11 @@ function neighborInner(dir){
   stepCal(dir);
   const ws=addDays(state.sel,-new Date(state.sel+"T00:00").getDay());
   const html=mode==="month"?renderMonth():renderTimeline(mode==="week"?Array.from({length:7},(_,i)=>addDays(ws,i)):[state.sel]);
+  const dk=new Date(state.sel+"T00:00"), label=mode==="month"?`${state.year}年${state.month+1}月`:mode==="week"?`${md(ws)}〜${md(addDays(ws,6))}`:`${dk.getMonth()+1}月${dk.getDate()}日（${WD[dk.getDay()]}）`;
   Object.assign(state,keep);
   const t=document.createElement("template"); t.innerHTML=html; const sec=t.content.querySelector(".swipe");
   if(!sec) return null;
+  const tag=document.createElement("div"); tag.className="peek-label"; tag.textContent=label; sec.prepend(tag);
   sec.querySelectorAll("*").forEach(n=>{[...n.attributes].forEach(a=>{if(a.name==="id"||a.name.startsWith("data-")) n.removeAttribute(a.name);}); if(n.matches("button,a,input,select")) n.tabIndex=-1;});
   return sec;
 }
@@ -937,7 +968,7 @@ function syncPeeks(box){ const tb=box.querySelector(":scope>.tl-body"); if(tb) b
 let peekT; function schedulePeeks(){ clearTimeout(peekT); peekT=setTimeout(()=>buildPeeks($(".swipe")),60); }
 
 /* ---------- swipe left/right on the calendar to go to the next/previous month (week, day) ---------- */
-let swp=null;
+let swp=null; const PEEK_GAP=14; // 月と月のあいだのすき間（px）
 const reduceMotion=()=>window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
 document.addEventListener("touchstart",e=>{
   swp=null; if(state.view!=="cal"||e.touches.length!==1||(state.calMode||"month")==="list") return;
@@ -958,7 +989,7 @@ function swipeEnd(e){
   const dir=s.dx<0?1:-1, ts=(s.box.querySelector(":scope>.tl-body")||{}).scrollTop, done=()=>{ stepCal(dir); if(ts!=null) state.tlScroll=ts; render(); };
   if(reduceMotion()){ done(); return; }
   const left=w-Math.abs(s.dx), ms=Math.round(Math.max(90,Math.min(220,left/w*260)));
-  s.box.style.transition=`transform ${ms}ms ease-out`; s.box.style.transform=`translateX(${dir>0?-w:w}px)`; setTimeout(done,ms);
+  const full=w+PEEK_GAP; s.box.style.transition=`transform ${ms}ms ease-out`; s.box.style.transform=`translateX(${dir>0?-full:full}px)`; setTimeout(done,ms);
 }
 document.addEventListener("touchend",swipeEnd,{passive:false}); document.addEventListener("touchcancel",swipeEnd);
 function moveEvent(id,occ,k){
