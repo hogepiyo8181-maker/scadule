@@ -115,7 +115,8 @@ button{cursor:pointer}
 .dnum{font-weight:700;font-size:.95rem;line-height:1;display:inline-grid;place-items:center;width:1.65rem;height:1.65rem;border-radius:50%;align-self:center}
 .day.sun .dnum,.day.hol .dnum{color:var(--sun)} .day.sat .dnum{color:var(--sat)}
 .day.today .dnum{background:var(--today);color:var(--accent-ink)}
-.hname{font-size:.66rem;color:var(--sun);line-height:1.2;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.chip.hn{background:none;border-left:0;color:var(--sun);text-align:center;font-size:.66rem;line-height:calc(.72rem * 1.35)}
+.grid .chip.hn{text-overflow:ellipsis}
 .chip{display:block;flex:none;font-size:.72rem;line-height:1.35;padding:1px 4px;border-radius:4px;background:var(--cs);border-left:3px solid var(--cc);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ink)}
 .chip.full{background:var(--cc);color:#fff;border-left:0}
 .chip.task{background:none;border:1px solid var(--cc)}
@@ -408,15 +409,16 @@ function occurrencesOn(k){
   return out.sort(sortItems);
 }
 // 何日も続く終日の予定が、週の中で同じ段（レーン）に並ぶように順番を決める。null はすき間（見えない空きの段）
-function allDayLanes(keys){
+// lead: その日のいちばん初めに入れたいもの（祝日の名前など）。1日だけの終日の予定と同じあつかいで、空いた段に入る
+function allDayLanes(keys,lead){
   const per=keys.map(k=>occurrencesOn(k)), spans=new Map(), laneOf=new Map(), busy=[], key=o=>o.id+"|"+o.occ;
   per.forEach((list,i)=>list.forEach(o=>{ if(o.allDay&&o.multi){ const m=spans.get(key(o))||{k:key(o),first:i,last:i}; m.last=i; spans.set(m.k,m); } }));
   [...spans.values()].sort((a,b)=>a.first-b.first||(b.last-b.first)-(a.last-a.first)).forEach(m=>{
     let l=0; while((busy[l]=busy[l]||new Set()) && [...Array(m.last-m.first+1)].some((_,j)=>busy[l].has(m.first+j))) l++;
     for(let i=m.first;i<=m.last;i++) busy[l].add(i); laneOf.set(m.k,l);
   });
-  return per.map(list=>{
-    const rows=[], singles=[], rest=[];
+  return per.map((list,i)=>{
+    const rows=[], singles=lead&&lead[i]?[lead[i]]:[], rest=[];
     list.forEach(o=>{ if(o.allDay&&o.multi) rows[laneOf.get(key(o))]=o; else if(o.allDay) singles.push(o); else rest.push(o); });
     for(let l=0;l<rows.length;l++) if(!rows[l]) rows[l]=singles.length?singles.shift():null;
     return [...rows,...singles,...rest];
@@ -521,20 +523,16 @@ function renderMonth(){
   const first=new Date(y,m,1).getDay(), dim=new Date(y,m+1,0).getDate();
   const total=Math.ceil((first+dim)/7)*7; const cells=[];
   const keyAt=i=>{const d=new Date(y,m,1-first+i);return ds(d.getFullYear(),d.getMonth(),d.getDate());};
-  const lanes=[], holRow=[]; // holRow: 祝日の名前と何日も続く予定が同じ週にあるとき、帯がずれないように全部の日に名前の行をとる
-  for(let w=0;w<total;w+=7){
-    const ks=Array.from({length:7},(_,j)=>keyAt(w+j)), ls=allDayLanes(ks);
-    const need=ls.some(l=>l.some(o=>o&&o.allDay&&o.multi))&&ks.some(k=>holiday(k)&&new Date(k+"T00:00").getMonth()===m);
-    lanes.push(...ls); holRow.push(...ks.map(()=>need));
-  }
+  // 祝日の名前は予定と同じ並びの1行として入れる（ほかの日に空き行を作らず、何日も続く帯もずれない）
+  const lanes=[]; for(let w=0;w<total;w+=7){ const ks=Array.from({length:7},(_,j)=>keyAt(w+j)); lanes.push(...allDayLanes(ks,ks.map(k=>holiday(k)&&new Date(k+"T00:00").getMonth()===m?{hol:holiday(k)}:null))); }
   for(let i=0;i<total;i++){
     const d=new Date(y,m,1-first+i); const k=ds(d.getFullYear(),d.getMonth(),d.getDate());
     const out=d.getMonth()!==m, w=d.getDay(), hol=holiday(k);
     const evs=lanes[i];
     const cls=["day",out?"out":"",w===0?"sun":"",w===6?"sat":"",hol?"hol":"",k===TODAY?"today":""].join(" ");
-    cells.push(`<button type="button" class="${cls}" data-day="${k}" aria-label="${jdate(k)}${hol?" "+hol:""}、${evs.filter(Boolean).length}件">
-      <span class="dnum num">${d.getDate()}</span>${hol&&!out?`<span class="hname">${hol}</span>`:holRow[i]?`<span class="hname" aria-hidden="true">&nbsp;</span>`:""}
-      ${evs.slice(0,12).map(o=>o?chip(o,k):SPACER).join("")}<span class="more" hidden></span></button>`);
+    cells.push(`<button type="button" class="${cls}" data-day="${k}" aria-label="${jdate(k)}${hol?" "+hol:""}、${evs.filter(o=>o&&!o.hol).length}件">
+      <span class="dnum num">${d.getDate()}</span>
+      ${evs.slice(0,12).map(o=>!o?SPACER:o.hol?`<span class="chip hn" aria-hidden="true">${esc(o.hol)}</span>`:chip(o,k)).join("")}<span class="more" hidden></span></button>`);
   }
   return `<section class="cal swipe" aria-label="月のカレンダー">
     <div class="dow">${WD.map(w=>`<div>${w}</div>`).join("")}</div>
@@ -931,8 +929,9 @@ function fitGrid(g,room){
     const lim=d.getBoundingClientRect().bottom-1, low=el=>!el.hidden&&el.getBoundingClientRect().bottom>lim;
     if(!chips.some(low)) return;
     more.textContent="+9"; more.hidden=false; let n=0;
-    for(let i=chips.length-1;i>0&&(low(more)||chips.some(low));i--){chips[i].hidden=true;if(!chips[i].classList.contains("sp"))n++;}
+    for(let i=chips.length-1;i>0&&(low(more)||chips.some(low));i--){chips[i].hidden=true;if(chips[i].dataset.ev)n++;}
     for(let i=chips.length-1;i>=0;i--){ if(chips[i].hidden) continue; if(chips[i].classList.contains("sp")) chips[i].hidden=true; else break; } // 下に残ったすき間は消す
+    if(!n){more.hidden=true;return;} // 隠れたのが祝日の名前やすき間だけなら「+0」は出さない
     more.textContent="+"+n; more.setAttribute("aria-label",`ほか${n}件`);
   });
 }
