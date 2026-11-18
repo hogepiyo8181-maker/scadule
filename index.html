@@ -22,7 +22,7 @@
   --bg:#F3F5F4; --surface:#FFFFFF; --ink:#1C2826; --muted:#5C6B68; --line:#D9E0DE;
   --accent:#17675C; --accent-ink:#FFFFFF; --accent-soft:#DDEFEA;
   --sun:#C2362F; --sat:#2B5FAE; --today:#17675C;
-  --sel:#FFF3C4; --sel-line:#D6A600; --danger:#B3261E;
+  --sel:#FFF3C4; --sel-line:#D6A600; --danger:#B3261E; --err:#C62828;
   --f-display:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
   --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic","Meiryo",sans-serif;
   --r:12px;
@@ -31,14 +31,14 @@
   --bg:#141A19; --surface:#1D2523; --ink:#E8EEEC; --muted:#9AA9A5; --line:#33403D;
   --accent:#4CC2AE; --accent-ink:#0E1A18; --accent-soft:#1E3A35;
   --sun:#F07A72; --sat:#7EA6F0; --today:#4CC2AE;
-  --sel:#4A3F12; --sel-line:#E8C23A; --danger:#F2B8B5;
+  --sel:#4A3F12; --sel-line:#E8C23A; --danger:#F2B8B5; --err:#FF6B61;
   color-scheme:dark;
 }}
 :root[data-theme="dark"]{
   --bg:#141A19; --surface:#1D2523; --ink:#E8EEEC; --muted:#9AA9A5; --line:#33403D;
   --accent:#4CC2AE; --accent-ink:#0E1A18; --accent-soft:#1E3A35;
   --sun:#F07A72; --sat:#7EA6F0; --today:#4CC2AE;
-  --sel:#4A3F12; --sel-line:#E8C23A; --danger:#F2B8B5;
+  --sel:#4A3F12; --sel-line:#E8C23A; --danger:#F2B8B5; --err:#FF6B61;
   color-scheme:dark;
 }
 html{-webkit-text-size-adjust:100%}
@@ -198,6 +198,9 @@ button.chip.full{border:0}
 .seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
 .title-in{width:100%;border:0;border-bottom:2px solid var(--line);background:none;font-family:var(--f-display);font-size:1.4rem;font-weight:700;padding:8px 2px;border-radius:0}
 .title-in:focus{border-bottom-color:var(--accent);outline:none}
+input.bad{border-color:var(--err);color:var(--err);box-shadow:0 0 0 1px var(--err)}
+#t-err{font-size:.95rem;color:var(--err)}
+.seg.dsel button{min-height:40px;padding:6px}
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-weight:700;cursor:pointer}
 .switch{position:relative;width:52px;height:30px;flex:none}
 .switch input{position:absolute;inset:0;opacity:0;cursor:pointer;margin:0;z-index:1}
@@ -583,40 +586,63 @@ function miniCal(d){
     h+=`<button type="button" class="mday${w===0?" sun":""}${w===6?" sat":""}${holiday(k)?" hol":""}${has?" has":""}" data-mdate="${k}" aria-pressed="${d.dates.has(k)}" aria-label="${jdate(k)}">${x}</button>`;}
   return h;
 }
+// 予定の時間が正しいか。終わりが始まりより前なら、「次の日の朝まで」にチェックがない限りまちがいとする
+function timeErr(d){
+  if(!d||d.type!=="event"||d.allDay) return "";
+  if(!d.start||!d.end) return "始まりと終わりの時間を入れてください。";
+  const a=toMin(d.start), b=toMin(d.end);
+  if(a===b) return "始まりと終わりが同じ時間です。";
+  if(b<a&&!d.overnight) return "終わりの時間が、始まりの時間より前になっています。";
+  return "";
+}
+function updateTimeCheck(){
+  const d=state.draft; if(!d) return; const err=timeErr(d), back=d.start&&d.end&&toMin(d.end)<toMin(d.start);
+  const box=$("#t-err"); if(box){box.hidden=!err; box.textContent=err?`${WARN} ${err}`:"";}
+  const nb=$("#t-night"); if(nb) nb.hidden=!(back||d.overnight);
+  const hn=$("#t-nhint"); if(hn) hn.hidden=!(back&&d.overnight);
+  ["#d-start","#d-end"].forEach(id=>{const el=$(id); if(el) el.classList.toggle("bad",!!err);});
+  document.querySelectorAll('[data-act="save"]').forEach(b=>b.disabled=!!err);
+}
 function renderEdit(){
   const d=state.draft; const isTask=d.type==="task"; const n=d.dates.size;
   const custom=d.color&&!COLORS.some(c=>c.h.toLowerCase()===d.color.toLowerCase());
   return `<div style="display:grid;gap:12px">
-  <div class="sbar"><button class="btn ghost" type="button" data-act="cancel">‹ 戻る</button><h2>${d.editId?"予定を直す":"予定を入れる"}</h2><button class="btn primary" type="button" data-act="save">保存</button></div>
+  <div class="sbar"><button class="btn ghost" type="button" data-act="cancel">‹ 戻る</button><h2>${d.editId?"予定を直す":"予定を入れる"}</h2><button class="btn primary" type="button" data-act="save" ${timeErr(d)?"disabled":""}>保存</button></div>
   ${d.isRep?`<section class="card"><span class="lbl">直す範囲（くり返しの予定です）</span><div class="seg" role="group" aria-label="直す範囲"><button type="button" data-scope="one" aria-pressed="${d.scope==="one"}">${md(d.occ)}の回だけ</button><button type="button" data-scope="all" aria-pressed="${d.scope==="all"}">すべての回</button></div></section>`:""}
   <div class="seg" role="group" aria-label="予定かタスクか"><button type="button" data-dtype="event" aria-pressed="${!isTask}">予定</button><button type="button" data-dtype="task" aria-pressed="${isTask}">タスク</button></div>
   <input class="title-in" type="text" id="d-title" data-d="title" value="${esc(d.title)}" placeholder="${isTask?"やることを入力":"タイトル（空なら種類の名前）"}" aria-label="タイトル">
-  <section class="card">
-    <label class="switch-row" for="d-allDay"><span>終日</span><span class="switch"><input type="checkbox" role="switch" id="d-allDay" data-d="allDay" ${d.allDay?"checked":""}><span></span></span></label>
-    ${d.allDay&&!isTask&&catOf(d.cat)&&catOf(d.cat).pay?`<p class="warn">${WARN} 「${esc(catOf(d.cat).name)}」は給料を計算する種類ですが、終日のままだと時間がないので給料に入りません。「終日」をオフにして時間を入れてください。</p>`:""}
-    ${d.allDay&&!isTask?`<div class="row"><label for="d-endDate" class="lbl">終わりの日</label><input type="date" id="d-endDate" data-d="endDate" value="${d.endDate||""}" min="${[...d.dates].sort()[0]||""}"></div><p class="hint">旅行など何日も続く予定は、下で始まりの日を1つ選び、ここで終わりの日を選ぶと1つの予定になります。1日だけなら空のままにします。</p>`:""}
-    ${d.allDay?"":isTask?`<div class="row"><label for="d-start" class="lbl">時刻</label><input type="time" id="d-start" data-d="start" value="${d.start}"></div>`
-      :`<div class="row trow"><input type="time" id="d-start" data-d="start" value="${d.start}" aria-label="開始"> 〜 <input type="time" id="d-end" data-d="end" value="${d.end}" aria-label="終了"></div><p class="hint">終わりが始まりより早いときは、次の日の朝までとして計算します（夜勤など）。</p>`}
-  </section>
-  <section class="card">
-    <div class="row" style="justify-content:space-between"><span class="lbl">日にち${d.editId?"":"（いくつでも選べます）"}</span><span class="row" style="flex-wrap:nowrap"><button class="icon-btn" type="button" data-act="mprev" aria-label="前の月">‹</button><b class="num">${d.my}年${d.mm+1}月</b><button class="icon-btn" type="button" data-act="mnext" aria-label="次の月">›</button></span></div>
-    <div class="mini" id="mini">${miniCal(d)}</div>
-    <p class="picked">${n?[...d.dates].sort().map(md).join("、")+`（${n}日）`:"日にちを選んでください"}</p>
-    ${d.editId?`<p class="hint">ほかの日もタップすると、同じ内容をその日にも入れられます。</p>`:`<p class="hint">タップするか指でなぞると、何日でもまとめて選べます。もう一度タップすると外れます。</p>
-    <div class="row"><span class="hint">曜日でまとめて選ぶ：</span><div class="wkrow">${WD.map((w,i)=>`<button type="button" data-wk="${i}" aria-label="${d.mm+1}月の毎週${w}曜日">${w}</button>`).join("")}</div></div>
-    <div class="row"><button type="button" class="small" data-act="clear" ${n?"":"disabled"}>選んだ日をクリア</button></div>`}
-  </section>
-  ${d.isRep&&d.scope==="one"?"":`<section class="card"><label for="d-repeat" class="lbl">くり返し</label>
-    <select id="d-repeat" data-d="repeat">${[["","しない"],["day","毎日"],["week","毎週"],["month","毎月"],["year","毎年"]].map(([v,l])=>`<option value="${v}" ${d.repeat===v?"selected":""}>${l}</option>`).join("")}</select>
-    ${d.repeat?`<p class="hint">${repeatLabel({repeat:{freq:d.repeat,interval:d.repeat===d.origFreq?d.interval:1},date:[...d.dates].sort()[0]||TODAY})}${n>1?"。選んだ日それぞれがくり返します":""}</p>
-    <div class="row"><label for="d-until" class="lbl">終わりの日</label><input type="date" id="d-until" data-d="until" value="${d.until||""}"></div><p class="hint">空ならずっと続きます。</p>`:""}
-  </section>`}
   <section class="card">
     <span class="lbl">種類（色）</span>${catButtons(d.cat)}
     <details ${d.color?"open":""}><summary class="hint" style="cursor:pointer">この予定だけ色を変える</summary>
       <div class="sw" style="margin-top:10px" role="group" aria-label="この予定の色"><button type="button" class="def" data-dcolor="" aria-pressed="${!d.color}">種類の色</button>${COLORS.map(c=>`<button type="button" style="--cc:${c.h}" title="${c.n}" aria-label="${c.n}" data-dcolor="${c.h}" aria-pressed="${d.color===c.h}"></button>`).join("")}<label class="custom${custom?" on":""}" style="--cc:${d.color||GRAY}" title="自分で色を選ぶ"><input type="color" id="d-custom" data-dcustom value="${(d.color||GRAY).toLowerCase()}" aria-label="自分で色を選ぶ"><span aria-hidden="true">＋</span></label></div>
     </details>
   </section>
+  <section class="card">
+    <label class="switch-row" for="d-allDay"><span>終日</span><span class="switch"><input type="checkbox" role="switch" id="d-allDay" data-d="allDay" ${d.allDay?"checked":""}><span></span></span></label>
+    ${d.allDay&&!isTask&&catOf(d.cat)&&catOf(d.cat).pay?`<p class="warn">${WARN} 「${esc(catOf(d.cat).name)}」は給料を計算する種類ですが、終日のままだと時間がないので給料に入りません。「終日」をオフにして時間を入れてください。</p>`:""}
+    ${d.allDay&&!isTask?`<div class="row"><label for="d-endDate" class="lbl">終わりの日</label><input type="date" id="d-endDate" data-d="endDate" value="${d.endDate||""}" min="${[...d.dates].sort()[0]||""}"></div><p class="hint">旅行など何日も続く予定は、下で始まりの日を1つ選び、ここで終わりの日を選ぶと1つの予定になります。1日だけなら空のままにします。</p>`:""}
+    ${d.allDay?"":isTask?`<div class="row"><label for="d-start" class="lbl">時刻</label><input type="time" id="d-start" data-d="start" value="${d.start}"></div>`
+      :(()=>{const err=timeErr(d), back=d.start&&d.end&&toMin(d.end)<toMin(d.start); return `<div class="row trow"><input type="time" id="d-start" data-d="start" value="${d.start}" aria-label="開始" class="${err?"bad":""}"> 〜 <input type="time" id="d-end" data-d="end" value="${d.end}" aria-label="終了" class="${err?"bad":""}"></div>
+      <p class="warn" id="t-err" role="alert" ${err?"":"hidden"}>${err?`${WARN} ${err}`:""}</p>
+      <label class="check" id="t-night" ${back||d.overnight?"":"hidden"}><input type="checkbox" id="d-overnight" data-d="overnight" ${d.overnight?"checked":""}>次の日の朝まで（夜勤など）</label>
+      <p class="hint" id="t-nhint" ${back&&d.overnight?"":"hidden"}>始まりの日の夜から、次の日の朝までの予定として入れます。</p>`;})()}
+  </section>
+  <section class="card">
+    <span class="lbl">日にち</span>
+    <div class="seg dsel" role="group" aria-label="日にちの選び方"><button type="button" data-dmulti="0" aria-pressed="${!d.multi}">1日だけ</button><button type="button" data-dmulti="1" aria-pressed="${!!d.multi}">複数の日を選ぶ</button></div>
+    ${!d.multi?`<div class="row"><input type="date" id="d-date1" data-d="date1" value="${[...d.dates].sort()[0]||state.sel}" aria-label="日にち"><span class="picked" id="d-picked">${jdate([...d.dates].sort()[0]||state.sel)}</span></div>`:`
+    <div class="row" style="justify-content:space-between"><span class="hint">${d.editId?"ほかの日もタップすると、同じ内容をその日にも入れられます。":"タップするか指でなぞると、何日でもまとめて選べます。"}</span><span class="row" style="flex-wrap:nowrap;margin-left:auto"><button class="icon-btn" type="button" data-act="mprev" aria-label="前の月">‹</button><b class="num">${d.my}年${d.mm+1}月</b><button class="icon-btn" type="button" data-act="mnext" aria-label="次の月">›</button></span></div>
+    <div class="mini" id="mini">${miniCal(d)}</div>
+    <p class="picked">${n?[...d.dates].sort().map(md).join("、")+`（${n}日）`:"日にちを選んでください"}</p>
+    ${d.editId?"":`<p class="hint">もう一度タップすると外れます。</p>
+    <div class="row"><span class="hint">曜日でまとめて選ぶ：</span><div class="wkrow">${WD.map((w,i)=>`<button type="button" data-wk="${i}" aria-label="${d.mm+1}月の毎週${w}曜日">${w}</button>`).join("")}</div></div>
+    <div class="row"><button type="button" class="small" data-act="clear" ${n?"":"disabled"}>選んだ日をクリア</button></div>`}`}
+  </section>
+  ${d.isRep&&d.scope==="one"?"":`<section class="card"><label for="d-repeat" class="lbl">くり返し</label>
+    <select id="d-repeat" data-d="repeat">${[["","しない"],["day","毎日"],["week","毎週"],["month","毎月"],["year","毎年"]].map(([v,l])=>`<option value="${v}" ${d.repeat===v?"selected":""}>${l}</option>`).join("")}</select>
+    ${d.repeat?`<p class="hint">${repeatLabel({repeat:{freq:d.repeat,interval:d.repeat===d.origFreq?d.interval:1},date:[...d.dates].sort()[0]||TODAY})}${n>1?"。選んだ日それぞれがくり返します":""}</p>
+    <div class="row"><label for="d-until" class="lbl">終わりの日</label><input type="date" id="d-until" data-d="until" value="${d.until||""}"></div><p class="hint">空ならずっと続きます。</p>`:""}
+  </section>`}
   <section class="card"><label for="d-place" class="lbl">場所</label><input type="text" id="d-place" data-d="place" value="${esc(d.place||"")}" placeholder="例：駅前店、〇〇ホール" style="width:100%"><label for="d-memo" class="lbl">メモ</label><textarea id="d-memo" data-d="memo" placeholder="例：持ち物、集合場所、連絡先など" style="min-height:96px">${esc(d.memo||"")}</textarea>${n>1&&!d.editId?`<p class="hint">選んだ${n}日すべてに同じメモが入ります。</p>`:""}</section>
   ${d.editId?`<button type="button" class="btn danger" data-act="delete">${d.isRep?(d.scope==="one"?`${md(d.occ)}の回だけ消す`:"すべての回を消す"):`この${isTask?"タスク":"予定"}を消す`}</button>`:`
   <details class="card" id="textbox" ${d.textOpen?"open":""}><summary>紙のカレンダーを見ながら文字でまとめて入れる</summary>
@@ -761,12 +787,14 @@ function openEdit(date,ev,occ,times){
   const base=ev||{type:"event",title:"",allDay:false,start:(times&&times.start)||"09:00",end:(times&&times.end)||"17:00",cat:state.cats[0].id,color:""};
   const k=ev?(occ||ev.date):date; const dd=new Date(k+"T00:00"); const L=ev?spanOf(ev):0;
   state.draft={editId:ev?ev.id:null,isRep:isRep(ev),scope:isRep(ev)?"one":"all",occ:ev?k:null,type:base.type,title:base.title,memo:base.memo||"",place:base.place||"",allDay:base.allDay,start:base.start||"09:00",end:base.end||"17:00",cat:base.cat,color:base.color||"",
-    endDate:L?addDays(k,L):"",repeat:isRep(ev)?ev.repeat.freq:"",origFreq:isRep(ev)?ev.repeat.freq:"",interval:isRep(ev)?Math.max(1,+ev.repeat.interval||1):1,until:isRep(ev)?(ev.repeat.until||""):"",dates:new Set([k]),my:dd.getFullYear(),mm:dd.getMonth(),text:"",mark:"",textOpen:false};
+    endDate:L?addDays(k,L):"",repeat:isRep(ev)?ev.repeat.freq:"",origFreq:isRep(ev)?ev.repeat.freq:"",interval:isRep(ev)?Math.max(1,+ev.repeat.interval||1):1,until:isRep(ev)?(ev.repeat.until||""):"",dates:new Set([k]),my:dd.getFullYear(),mm:dd.getMonth(),text:"",mark:"",textOpen:false,multi:false,
+    overnight:!!(ev&&base.type==="event"&&!base.allDay&&base.start&&base.end&&toMin(base.end)<toMin(base.start))};
   if(state.view!=="edit") state.back=state.view; go("edit");
 }
 function leaveEdit(){state.draft=null;go(["day","search","pay"].includes(state.back)?state.back:"cal");}
 function saveDraft(){
   const d=state.draft; if(!d.dates.size){toast("日にちを1つ以上選んでください");return;}
+  const te=timeErr(d); if(te){toast(te+"直してから保存してください");updateTimeCheck();return;}
   if(!catOf(d.cat)) d.cat=state.cats[0].id;
   const title=d.title.trim()||catOf(d.cat).name||"予定";
   const base={type:d.type,title,memo:(d.memo||"").trim(),place:(d.place||"").trim(),cat:d.cat,allDay:d.allDay,start:d.start,end:d.type==="task"?d.start:d.end,color:d.color};
@@ -1191,6 +1219,7 @@ document.addEventListener("click",ev=>{
   if(D.mdate){ if(ev.detail===0){d.dates.has(D.mdate)?d.dates.delete(D.mdate):d.dates.add(D.mdate);rerenderKeep();} return; }
   if(D.dtype){d.type=D.dtype; if(d.type==="task"&&catOf(d.cat)&&catOf(d.cat).pay){const t=state.cats.find(c=>!c.pay&&/やること|タスク/.test(c.name))||state.cats.find(c=>!c.pay);if(t)d.cat=t.id;} rerenderKeep();return;}
   if(D.dcat){d.cat=D.dcat;rerenderKeep();return;}
+  if(D.dmulti!==undefined){ d.multi=D.dmulti==="1"; if(!d.multi&&d.dates.size>1){const f=[...d.dates].sort()[0]; d.dates=new Set([f]); toast(`${md(f)}の1日だけにしました`);} if(!d.multi&&!d.dates.size) d.dates=new Set([state.sel]); rerenderKeep(); return; }
   if(D.dcolor!==undefined){d.color=D.dcolor;rerenderKeep();return;}
   if(D.wk!==undefined){
     const w=+D.wk, dim=new Date(d.my,d.mm+1,0).getDate(), ks=[];
@@ -1289,7 +1318,9 @@ document.addEventListener("input",ev=>{
     const k=t.dataset.d;
     if(k==="allDay"){d.allDay=t.checked;rerenderKeep();return;}
     if(k==="repeat"){d.repeat=t.value;rerenderKeep();return;}
-    d[k]=t.value; if(k==="text"||k==="mark") updatePreview(); return;
+    if(k==="overnight"){d.overnight=t.checked;updateTimeCheck();return;}
+    if(k==="date1"){ if(t.value){ d.dates=new Set([t.value]); const x=new Date(t.value+"T00:00"); d.my=x.getFullYear(); d.mm=x.getMonth(); const pk=$("#d-picked"); if(pk) pk.textContent=jdate(t.value); const ed=$("#d-endDate"); if(ed) ed.min=t.value; } return; }
+    d[k]=t.value; if(k==="text"||k==="mark") updatePreview(); if(k==="start"||k==="end") updateTimeCheck(); return;
   }
   if(t.dataset.dcustom!==undefined||t.dataset.ccustom){const l=t.closest(".custom");l.style.setProperty("--cc",t.value);l.classList.add("on");return;}
   if(t.id==="q"){state.q=t.value;$("#results").innerHTML=searchResults();return;}
@@ -1308,6 +1339,7 @@ document.addEventListener("input",ev=>{
   }
 });
 document.addEventListener("change",()=>save());
+document.addEventListener("change",ev=>{const t=ev.target,d=state.draft; if(d&&(t.dataset.d==="start"||t.dataset.d==="end")){d[t.dataset.d]=t.value;updateTimeCheck();}});
 document.addEventListener("change",ev=>{
   const t=ev.target;
   if(t.dataset.dcustom!==undefined&&state.draft){state.draft.color=t.value.toUpperCase();rerenderKeep();return;}
