@@ -92,11 +92,11 @@ button{cursor:pointer}
 .menu-row .mt b{font-size:1.1rem;font-family:var(--f-display)}
 .menu-row .mt small{font-size:.85rem;color:var(--muted)}
 .menu-row .chev{font-size:1.5rem;color:var(--muted)}
-.swipe{touch-action:pan-y}
-@keyframes inR{from{transform:translateX(48px);opacity:.25}to{transform:none;opacity:1}}
-@keyframes inL{from{transform:translateX(-48px);opacity:.25}to{transform:none;opacity:1}}
-.swipe.in-r{animation:inR .2s ease-out} .swipe.in-l{animation:inL .2s ease-out}
-@media (prefers-reduced-motion:reduce){.swipe.in-r,.swipe.in-l{animation:none}}
+.swipe{touch-action:pan-y;position:relative}
+.swipe.swiping{overflow:visible}
+.peek{position:absolute;top:0;width:100%;height:100%;overflow:hidden;background:var(--surface);pointer-events:none}
+.peek-prev{right:100%} .peek-next{left:100%}
+.swipe:not(.swiping)>.peek{visibility:hidden}
 
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .dow,.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
@@ -747,6 +747,7 @@ function render(){
   $("#fab").hidden=v!=="cal";
   $("#view").innerHTML=v==="cal"?renderCal():v==="day"?renderDay():v==="edit"?renderEdit():v==="search"?renderSearch():v==="set"?renderSet():v==="pay"?renderPay():renderColors();
   if(v==="cal"&&(state.calMode||"month")==="month") fitMonth();
+  if(v==="cal") schedulePeeks();
   if(v==="edit") updatePreview();
   const tb=$("#tl-body"); if(tb){ tb.scrollTop=state.tlScroll!=null?state.tlScroll:7*HOUR-8; tb.addEventListener("scroll",()=>{state.tlScroll=tb.scrollTop;},{passive:true}); }
 }
@@ -860,9 +861,13 @@ function stepCal(dir){
 }
 // 月のカレンダーを画面の高さいっぱいに広げ、マスに入りきらない予定は「+N」にまとめる
 function fitMonth(){
-  const g=$(".grid"); if(!g) return;
-  const rows=Math.ceil(g.children.length/7), fab=$("#fab"), top=g.getBoundingClientRect().top+window.scrollY;
+  const g=$(".swipe>.grid"); if(!g) return;
+  const fab=$("#fab"), top=g.getBoundingClientRect().top+window.scrollY;
   const room=window.innerHeight-top-(fab&&!fab.hidden?fab.offsetHeight+36:16);
+  g.dataset.room=room; fitGrid(g,room);
+}
+function fitGrid(g,room){
+  const rows=Math.ceil(g.children.length/7);
   g.style.setProperty("--cellh",Math.max(88,Math.floor(room/rows))+"px");
   g.querySelectorAll(".day").forEach(d=>{
     const chips=[...d.querySelectorAll(".chip")], more=d.querySelector(".more"); if(!chips.length||!more) return;
@@ -874,8 +879,34 @@ function fitMonth(){
     more.textContent="+"+n; more.setAttribute("aria-label",`ほか${n}件`);
   });
 }
-let fitT; window.addEventListener("resize",()=>{clearTimeout(fitT);fitT=setTimeout(()=>{if(state.view==="cal"&&(state.calMode||"month")==="month") fitMonth();},120);});
-if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{if(state.view==="cal"&&(state.calMode||"month")==="month") fitMonth();});
+const refit=()=>{if(state.view!=="cal") return; if((state.calMode||"month")==="month") fitMonth(); const b=$(".swipe"); if(b){b.querySelectorAll(".peek").forEach(x=>x.remove()); buildPeeks(b);}};
+let fitT; window.addEventListener("resize",()=>{clearTimeout(fitT);fitT=setTimeout(refit,120);});
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refit);
+
+// スライド中に横から見えてくる、前と次の月（週・日）。見た目だけの写しで、さわれない
+function neighborInner(dir){
+  const keep={year:state.year,month:state.month,sel:state.sel,listMore:state.listMore}, mode=state.calMode||"month";
+  stepCal(dir);
+  const ws=addDays(state.sel,-new Date(state.sel+"T00:00").getDay());
+  const html=mode==="month"?renderMonth():renderTimeline(mode==="week"?Array.from({length:7},(_,i)=>addDays(ws,i)):[state.sel]);
+  Object.assign(state,keep);
+  const t=document.createElement("template"); t.innerHTML=html; const sec=t.content.querySelector(".swipe");
+  if(!sec) return null;
+  sec.querySelectorAll("*").forEach(n=>{[...n.attributes].forEach(a=>{if(a.name==="id"||a.name.startsWith("data-")) n.removeAttribute(a.name);}); if(n.matches("button,a,input,select")) n.tabIndex=-1;});
+  return sec;
+}
+function buildPeeks(box){
+  if(!box||box.querySelector(":scope>.peek")||state.view!=="cal"||(state.calMode||"month")==="list") return;
+  const cur=box.querySelector(":scope>.grid");
+  [-1,1].forEach(dir=>{
+    const sec=neighborInner(dir); if(!sec) return;
+    const pane=document.createElement("div"); pane.className="peek "+(dir<0?"peek-prev":"peek-next"); pane.setAttribute("aria-hidden","true"); pane.inert=true;
+    pane.append(...sec.childNodes); box.appendChild(pane);
+    const g=pane.querySelector(".grid"); if(g&&cur&&cur.dataset.room) fitGrid(g,+cur.dataset.room);
+  });
+}
+function syncPeeks(box){ const tb=box.querySelector(":scope>.tl-body"); if(tb) box.querySelectorAll(".peek .tl-body").forEach(x=>x.scrollTop=tb.scrollTop); }
+let peekT; function schedulePeeks(){ clearTimeout(peekT); peekT=setTimeout(()=>buildPeeks($(".swipe")),60); }
 
 /* ---------- swipe left/right on the calendar to go to the next/previous month (week, day) ---------- */
 let swp=null;
@@ -888,17 +919,18 @@ document.addEventListener("touchstart",e=>{
 document.addEventListener("touchmove",e=>{
   if(!swp) return; if(mv&&mv.active){swp.box.style.transform="";swp=null;return;}
   const t=e.touches[0], dx=t.clientX-swp.x, dy=t.clientY-swp.y;
-  if(!swp.on){ if(Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.3) swp.on=true; else { if(Math.abs(dy)>12) swp=null; return; } }
+  if(!swp.on){ if(Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.3){ swp.on=true; buildPeeks(swp.box); syncPeeks(swp.box); swp.box.classList.add("swiping"); } else { if(Math.abs(dy)>12) swp=null; return; } }
   swp.dx=dx; swp.box.style.transition="none"; swp.box.style.transform=`translateX(${dx}px)`; if(e.cancelable) e.preventDefault();
 },{passive:false});
 function swipeEnd(e){
   if(!swp) return; const s=swp; swp=null; if(!s.on) return;
   if(e&&e.cancelable) e.preventDefault();
   const w=s.box.offsetWidth||320, go2=e&&e.type==="touchend"&&(Math.abs(s.dx)>w*.22||(Math.abs(s.dx)>40&&Date.now()-s.t<300));
-  if(!go2){ s.box.style.transition="transform .2s ease-out"; s.box.style.transform=""; return; }
-  const dir=s.dx<0?1:-1, done=()=>{ stepCal(dir); render(); const b=$(".swipe"); if(b&&!reduceMotion()) b.classList.add(dir>0?"in-r":"in-l"); };
+  if(!go2){ s.box.style.transition="transform .2s ease-out"; s.box.style.transform=""; setTimeout(()=>s.box.classList.remove("swiping"),220); return; }
+  const dir=s.dx<0?1:-1, ts=(s.box.querySelector(":scope>.tl-body")||{}).scrollTop, done=()=>{ stepCal(dir); if(ts!=null) state.tlScroll=ts; render(); };
   if(reduceMotion()){ done(); return; }
-  s.box.style.transition="transform .14s ease-in"; s.box.style.transform=`translateX(${dir>0?-w:w}px)`; setTimeout(done,140);
+  const left=w-Math.abs(s.dx), ms=Math.round(Math.max(90,Math.min(220,left/w*260)));
+  s.box.style.transition=`transform ${ms}ms ease-out`; s.box.style.transform=`translateX(${dir>0?-w:w}px)`; setTimeout(done,ms);
 }
 document.addEventListener("touchend",swipeEnd,{passive:false}); document.addEventListener("touchcancel",swipeEnd);
 function moveEvent(id,occ,k){
