@@ -229,6 +229,10 @@ textarea{width:100%;min-height:140px;line-height:1.7;font-variant-numeric:tabula
 .wkrow{display:flex;gap:6px;flex-wrap:wrap}
 .wkrow button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-weight:700;padding:0}
 .picked{font-size:.95rem;margin:0;font-variant-numeric:tabular-nums}
+.dlist{display:grid;gap:6px;margin-top:6px}
+.plist{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pchip{display:inline-flex;align-items:center;gap:4px;min-height:32px;padding:2px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:.9rem;font-variant-numeric:tabular-nums;cursor:pointer}
+.pchip span{color:var(--muted);font-size:.85em}
 .cats{display:flex;flex-wrap:wrap;gap:8px}
 .cat-btn{display:inline-flex;align-items:center;gap:8px;border:2px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;min-height:44px;font-weight:500}
 .cat-btn[aria-pressed="true"]{border-color:var(--cc);background:var(--cs);font-weight:700}
@@ -607,6 +611,31 @@ const defCat=()=>(catOf(state.defCat)||state.cats[0]).id;
 function catButtons(cur){
   return `<div class="cats" role="group" aria-label="種類">${state.cats.map(c=>`<button type="button" class="cat-btn" style="${cv(c.color)}" data-dcat="${c.id}" aria-pressed="${c.id===cur}"><i class="dot"></i>${esc(c.name||"名前なし")}</button>`).join("")}</div>`;
 }
+// 「1/2, 3/4, 10/1」「2027/1/2」「3月4日」「3/4〜3/6」のような日付の並びを読む。年がなければ今日より後の日にする
+function parseDateList(txt){
+  const out=new Set(), bad=[];
+  const one=(t,after)=>{
+    const m=t.match(/^(?:(\d{4})[\/\-年.])?(\d{1,2})[\/\-月.](\d{1,2})日?$/); if(!m) return null;
+    const mo=+m[2], da=+m[3], ok=y=>{const x=new Date(y,mo-1,da);return x.getMonth()===mo-1&&x.getDate()===da?ds(y,mo-1,da):null;};
+    if(m[1]) return ok(+m[1]);
+    const y=+after.slice(0,4), k=ok(y); return k&&k>=after?k:ok(y+1)||ok(y+2);
+  };
+  String(txt||"").normalize("NFKC").replace(/[(][^)]*[)]/g," ").split(/[\s,、;・]+/).filter(Boolean).forEach(t=>{
+    const [a,b]=t.split(/[〜~]/);
+    const s=one(a,TODAY); if(!s){bad.push(t);return;}
+    if(b===undefined){out.add(s);return;}
+    const e=/^\d{1,2}日?$/.test(b)?one(`${+s.slice(5,7)}/${parseInt(b)}`,s):one(b,s);
+    if(!e||diffDays(s,e)>92){bad.push(t);return;}
+    for(let k=s;k<=e;k=addDays(k,1)) out.add(k);
+  });
+  return {dates:[...out].sort(),bad};
+}
+const mdY=k=>(k.slice(0,4)!==TODAY.slice(0,4)?k.slice(0,4)+"年":"")+md(k);
+function dlPreview(txt){
+  if(!String(txt||"").trim()) return "「,」や空白で区切って、いくつでも書けます。「3/4〜3/6」のように続けて書くと、その間の日も入ります。年を書かなければ、今日より後の日になります。";
+  const r=parseDateList(txt);
+  return (r.dates.length?`${r.dates.length}日：${r.dates.slice(0,8).map(k=>(k.slice(0,4)!==TODAY.slice(0,4)?k.slice(0,4)+"年":"")+jdate(k)).join("、")}${r.dates.length>8?" ほか":""}`:"")+(r.bad.length?`${r.dates.length?" ／ ":""}読めない：${r.bad.map(esc).join("、")}`:"");
+}
 function miniCal(d){
   const y=d.my,m=d.mm; const first=new Date(y,m,1).getDay(), dim=new Date(y,m+1,0).getDate();
   let h=WD.map(w=>`<span class="w">${w}</span>`).join("");
@@ -663,8 +692,11 @@ function renderEdit(){
     ${!d.multi?`<div class="row"><input type="date" id="d-date1" data-d="date1" value="${[...d.dates].sort()[0]||state.sel}" aria-label="日にち"><span class="picked" id="d-picked">${jdate([...d.dates].sort()[0]||state.sel)}</span></div>`:`
     <div class="row" style="justify-content:space-between"><span class="hint">${d.editId?"ほかの日もタップすると、同じ内容をその日にも入れられます。":"タップするか指でなぞると、何日でもまとめて選べます。"}</span><span class="row" style="flex-wrap:nowrap;margin-left:auto"><button class="icon-btn" type="button" data-act="mprev" aria-label="前の月">‹</button><b class="num">${d.my}年${d.mm+1}月</b><button class="icon-btn" type="button" data-act="mnext" aria-label="次の月">›</button></span></div>
     <div class="mini" id="mini">${miniCal(d)}</div>
-    <p class="picked">${n?[...d.dates].sort().map(md).join("、")+`（${n}日）`:"日にちを選んでください"}</p>
-    ${d.editId?"":`<p class="hint">もう一度タップすると外れます。</p>
+    <div class="dlist"><label for="d-datelist" class="lbl">遠い日は日付を打って足す</label>
+      <div class="row" style="flex-wrap:nowrap"><input type="text" id="d-datelist" data-d="datelist" value="${esc(d.datelist||"")}" placeholder="例：1/2, 3/4, 3/5, 10/1" enterkeyhint="done" autocomplete="off" style="flex:1;min-width:0"><button type="button" class="btn" data-act="adddates">足す</button></div>
+      <p class="hint" id="dl-prev">${dlPreview(d.datelist)}</p></div>
+    ${n?`<div class="plist" aria-label="選んだ日（${n}日）">${[...d.dates].sort().map(k=>`<button type="button" class="pchip" data-undate="${k}" aria-label="${jdate(k)}を外す">${mdY(k)}<span aria-hidden="true">×</span></button>`).join("")}<span class="picked">（${n}日）</span></div>`:`<p class="picked">日にちを選んでください</p>`}
+    ${d.editId?"":`<p class="hint">カレンダーの日をもう一度タップするか、×を押すと外れます。</p>
     <div class="row"><span class="hint">曜日でまとめて選ぶ：</span><div class="wkrow">${WD.map((w,i)=>`<button type="button" data-wk="${i}" aria-label="${d.mm+1}月の毎週${w}曜日">${w}</button>`).join("")}</div></div>
     <div class="row"><button type="button" class="small" data-act="clear" ${n?"":"disabled"}>選んだ日をクリア</button></div>`}`}
   </section>
@@ -1256,6 +1288,13 @@ document.addEventListener("click",ev=>{
   if(D.mdate){ if(ev.detail===0){d.dates.has(D.mdate)?d.dates.delete(D.mdate):d.dates.add(D.mdate);rerenderKeep();} return; }
   if(D.dtype){d.type=D.dtype; if(d.type==="task"&&catOf(d.cat)&&catOf(d.cat).pay){const t=state.cats.find(c=>!c.pay&&/やること|タスク/.test(c.name))||state.cats.find(c=>!c.pay);if(t)d.cat=t.id;} rerenderKeep();return;}
   if(D.dcat){d.cat=D.dcat;rerenderKeep();return;}
+  if(D.undate){d.dates.delete(D.undate);rerenderKeep();return;}
+  if(D.act==="adddates"){
+    const r=parseDateList(d.datelist);
+    if(!r.dates.length){toast(r.bad.length?`「${r.bad[0]}」は日付として読めませんでした。「1/2」のように書いてください`:"足したい日付を「1/2, 3/4」のように書いてください");return;}
+    const before=d.dates.size; r.dates.forEach(k=>d.dates.add(k)); d.datelist=r.bad.join(" ");
+    rerenderKeep(); toast(`${d.dates.size-before}日を足しました（${r.bad.length?`読めなかった「${r.bad.join("、")}」は欄に残しています`:"いらない日は下の×で外せます"}）`); return;
+  }
   if(D.act==="setdef"&&catOf(d.cat)){state.defCat=d.cat;rerenderKeep();toast(`これから入れる予定は、はじめから「${catOf(d.cat).name||"名前なし"}」になります`);return;}
   if(D.dmulti!==undefined){ d.multi=D.dmulti==="1"; if(!d.multi&&d.dates.size>1){const f=[...d.dates].sort()[0]; d.dates=new Set([f]); toast(`${md(f)}の1日だけにしました`);} if(!d.multi&&!d.dates.size) d.dates=new Set([state.sel]); rerenderKeep(); return; }
   if(D.dcolor!==undefined){d.color=D.dcolor;rerenderKeep();return;}
@@ -1351,6 +1390,8 @@ document.addEventListener("toggle",ev=>{if(ev.target.id==="textbox"&&state.draft
 let _st=null; document.addEventListener("input",()=>{clearTimeout(_st);_st=setTimeout(save,150);});
 window.addEventListener("pagehide",()=>save());
 document.addEventListener("visibilitychange",()=>{if(document.hidden) save();});
+// 日付の欄でEnter（完了）を押したら「足す」と同じ
+document.addEventListener("keydown",ev=>{ if(ev.target.id==="d-datelist"&&ev.key==="Enter"&&!ev.isComposing){ ev.preventDefault(); const b=document.querySelector('[data-act="adddates"]'); if(b) b.click(); } });
 document.addEventListener("input",ev=>{
   const t=ev.target, d=state.draft;
   if(t.dataset.d&&d){
@@ -1359,7 +1400,7 @@ document.addEventListener("input",ev=>{
     if(k==="repeat"){d.repeat=t.value;rerenderKeep();return;}
     if(k==="overnight"){d.overnight=t.checked;updateTimeCheck();return;}
     if(k==="date1"){ if(t.value){ d.dates=new Set([t.value]); const x=new Date(t.value+"T00:00"); d.my=x.getFullYear(); d.mm=x.getMonth(); const pk=$("#d-picked"); if(pk) pk.textContent=jdate(t.value); const ed=$("#d-endDate"); if(ed) ed.min=t.value; } return; }
-    d[k]=t.value; if(k==="text"||k==="mark") updatePreview(); if(k==="start"||k==="end") updateTimeCheck(); return;
+    d[k]=t.value; if(k==="datelist"){const pv=$("#dl-prev"); if(pv) pv.innerHTML=dlPreview(t.value); return;} if(k==="text"||k==="mark") updatePreview(); if(k==="start"||k==="end") updateTimeCheck(); return;
   }
   if(t.dataset.dcustom!==undefined||t.dataset.ccustom){const l=t.closest(".custom");l.style.setProperty("--cc",t.value);l.classList.add("on");return;}
   if(t.id==="q"){state.q=t.value;$("#results").innerHTML=searchResults();return;}
